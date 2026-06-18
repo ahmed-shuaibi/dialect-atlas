@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * DIALECT Atlas — dark-only design system, ported from shuaibi-portfolio.
+ * Thesis: chrome is silent (near-monochrome grayscale), data is loud (the only
+ * saturated color in the product is the ME/CO edge encoding). All critique
+ * must-fixes folded in: solid border token, dark-only, dot-grid masked behind
+ * data surfaces, mandatory card inset-highlight, AA-safe muted-foreground-strong,
+ * brand focus ring, color-scheme: dark.
+ */
+:root {
+  color-scheme: dark;
+
+  --background: oklch(0.02 0 0); /* #050505 near-black canvas */
+  --foreground: oklch(0.92 0 0); /* #e4e4e7 soft white body */
+  --card: oklch(0.08 0 0);
+  --card-foreground: oklch(0.92 0 0);
+  --popover: oklch(0.09 0 0);
+  --popover-foreground: oklch(0.92 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.02 0 0);
+  --secondary: oklch(0.15 0 0);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.15 0 0);
+  --muted-foreground: oklch(0.45 0 0); /* decoration / eyebrows only */
+  --muted-foreground-strong: oklch(0.62 0 0); /* data-bearing secondary text (AA) */
+  --accent: oklch(0.15 0 0);
+  --accent-foreground: oklch(0.92 0 0);
+  --destructive: oklch(0.577 0.245 27.3);
+  --border: oklch(0.15 0 0); /* SOLID #27272a (critique #1) */
+  --input: oklch(0.18 0 0);
+  --ring: #8ab2c0; /* brand focus ring (critique #6) */
+  --radius: 0.625rem;
+
+  --brand: #8ab2c0; /* the single grayscale-breaking accent */
+
+  /* data-viz encoding — the ONLY saturated colors in the product */
+  --me-color: #4ea3df; /* mutual exclusivity — blue, solid (Okabe-Ito derived) */
+  --co-color: #e9a13b; /* co-occurrence — amber, dashed */
+  --ns-color: #6b7280;
+  --node-fill: oklch(0.5 0.015 220);
+
+  --elev-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted-foreground-strong: var(--muted-foreground-strong);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-me: var(--me-color);
+  --color-co: var(--co-color);
+  --color-ns: var(--ns-color);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* dot-grid texture lives in the GUTTER only; opaque data surfaces mask it */
+    background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1.1px, transparent 1.1px);
+    background-size: 22px 22px;
+  }
+  ::selection {
+    @apply bg-foreground text-background;
+  }
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2b2b2b;
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+    background-clip: padding-box;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* wide-tracked mono eyebrow — the "designed" signature, ported from portfolio */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .hairline {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+  }
+  /* opaque data surface — masks the dot-grid, lifted by border + inset highlight */
+  .surface {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--elev-highlight);
+    position: relative;
+    isolation: isolate;
+  }
+  /* the network sits on the true-black plane so the edge colors win */
+  .canvas-surface {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    position: relative;
+    isolation: isolate;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--brand);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
