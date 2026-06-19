@@ -17,8 +17,7 @@ const layoutOpts = {
   name: "fcose",
   quality: "default",
   randomize: true,
-  animate: true,
-  animationDuration: 600,
+  animate: false, // instant layout — no expand-in animation
   nodeRepulsion: 8500,
   idealEdgeLength: 95,
   nodeSeparation: 90,

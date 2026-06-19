@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { cn, fmtInt } from "@/lib/utils";
-import type { Atlas, Cohort } from "@/lib/atlas";
+import { STUDY_LABEL, type Atlas, type Cohort } from "@/lib/atlas";
 
 export const prettyCohort = (c: Cohort) => c.cohort.replace(/_/g, " ");
 
@@ -48,7 +48,9 @@ export function CohortCombobox({
           {selected ? (
             <span className="flex min-w-0 items-baseline gap-2">
               <span className="truncate font-mono text-foreground">{prettyCohort(selected)}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">{selected.study}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {STUDY_LABEL[selected.study] ?? selected.study}
+              </span>
             </span>
           ) : (
             <span className="text-muted-foreground">Select a cohort…</span>
@@ -62,7 +64,7 @@ export function CohortCombobox({
           <CommandList>
             <CommandEmpty>No cohort found.</CommandEmpty>
             {groups.map(([study, list]) => (
-              <CommandGroup key={study} heading={study}>
+              <CommandGroup key={study} heading={STUDY_LABEL[study] ?? study}>
                 {list.map((c) => (
                   <CommandItem
                     key={c.id}

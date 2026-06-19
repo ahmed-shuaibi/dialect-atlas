@@ -32,9 +32,16 @@ export interface Cohort {
   n_samples: number;
   median_tmb: number;
   eps: number;
+  cbio: string;
   drivers: string[];
   bmrs: Partial<Record<Bmr, Record<Direction, DirData>>>;
 }
+
+export const STUDY_LABEL: Record<string, string> = {
+  TCGA: "TCGA PanCan Atlas",
+  "MSK-IMPACT": "MSK-IMPACT",
+  "MSK-CHORD": "MSK-CHORD",
+};
 
 export interface Atlas {
   bmrs: Bmr[];

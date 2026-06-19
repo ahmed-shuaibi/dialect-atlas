@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { ExternalLink } from "lucide-react";
 import { SiteNav } from "@/components/SiteNav";
 import { Footer } from "@/components/Footer";
 import { CohortCombobox } from "@/components/CohortCombobox";
-import { CrossBmrStrip } from "@/components/CrossBmrStrip";
 import { NetworkView, type NetSelection } from "@/components/NetworkView";
-import { PairDetail } from "@/components/PairDetail";
 import { ResultTable } from "@/components/ResultTable";
-import { Segmented, type SegOption } from "@/components/ui/segmented";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
+  BMR_LABEL,
+  bmrCounts,
   buildElements,
   loadAtlas,
   tableRows,
@@ -18,41 +20,26 @@ import {
 import { useHashState } from "@/lib/useHashState";
 import { fmtInt } from "@/lib/utils";
 
-const Dot = ({ c }: { c: string }) => (
-  <span className="size-2 rounded-full" style={{ background: c }} />
-);
+const TOPK = 25;
+const SHOW_LABEL: Record<DirFilter, string> = {
+  both: "Both",
+  ME: "Mutually exclusive",
+  CO: "Co-occurring",
+};
 
-const DIR_OPTS: SegOption<DirFilter>[] = [
-  { value: "both", label: "Both" },
-  { value: "ME", label: <span className="flex items-center gap-1.5"><Dot c="var(--me-color)" /> ME</span> },
-  { value: "CO", label: <span className="flex items-center gap-1.5"><Dot c="var(--co-color)" /> CO</span> },
-];
-const TOPK_OPTS: SegOption<string>[] = ["10", "15", "25", "50"].map((v) => ({ value: v, label: v }));
-
-function ControlLabel({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="eyebrow hidden sm:inline">{label}</span>
+    <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+      {label}
       {children}
-    </div>
-  );
-}
-
-function SectionHead({ n, title }: { n: string; title: string }) {
-  return (
-    <div className="mb-4 flex items-center gap-4">
-      <span className="eyebrow shrink-0">
-        {n} / {title}
-      </span>
-      <div className="hairline flex-1" />
-    </div>
+    </label>
   );
 }
 
 export function App() {
   const [atlas, setAtlas] = useState<Atlas | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [hash, setHash] = useHashState({ c: "TCGA__BRCA", b: "cbase", d: "both", k: "15" });
+  const [hash, setHash] = useHashState({ c: "TCGA__BRCA", b: "cbase", d: "both" });
   const [selected, setSelected] = useState<NetSelection | null>(null);
 
   useEffect(() => {
@@ -60,8 +47,6 @@ export function App() {
   }, []);
 
   const onSelect = useCallback((s: NetSelection | null) => setSelected(s), []);
-
-  // clear selection when the underlying view changes
   useEffect(() => setSelected(null), [hash.c, hash.b, hash.d]);
 
   const view = useMemo(() => {
@@ -69,25 +54,19 @@ export function App() {
     const cohort = atlas.cohorts.find((c) => c.id === hash.c) ?? atlas.cohorts[0];
     const bmr = (atlas.bmrs.includes(hash.b as Bmr) ? hash.b : "cbase") as Bmr;
     const dir = (["both", "ME", "CO"].includes(hash.d) ? hash.d : "both") as DirFilter;
-    const topk = Number(hash.k) || 15;
-    const net = buildElements(cohort, bmr, dir, topk);
-    const rows = tableRows(cohort, bmr, dir, topk);
-    return { cohort, bmr, dir, topk, net, rows };
+    return {
+      cohort,
+      bmr,
+      dir,
+      net: buildElements(cohort, bmr, dir, TOPK),
+      rows: tableRows(cohort, bmr, dir, TOPK),
+    };
   }, [atlas, hash]);
-
-  const selectedEdge = useMemo(() => {
-    if (!view || !selected) return null;
-    const dd = view.cohort.bmrs[view.bmr]?.[selected.type];
-    if (!dd) return null;
-    const key = [selected.a, selected.b].sort().join("|");
-    const e = dd.edges.find((x) => [x.a, x.b].sort().join("|") === key);
-    return e ? { ...e, type: selected.type } : null;
-  }, [view, selected]);
 
   if (err) {
     return (
       <div className="flex min-h-screen items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        Failed to load atlas data. <br /> {err}
+        Failed to load atlas data.
       </div>
     );
   }
@@ -95,112 +74,125 @@ export function App() {
     return (
       <>
         <SiteNav />
-        <div className="mx-auto max-w-[1640px] space-y-3 px-5 py-10">
-          <div className="h-9 w-72 animate-pulse rounded-md bg-white/[0.04]" />
-          <div className="grid grid-cols-3 gap-2.5">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl bg-white/[0.04]" />
-            ))}
-          </div>
-          <div className="h-[520px] animate-pulse rounded-xl bg-white/[0.03]" />
+        <div className="mx-auto max-w-[1400px] space-y-4 px-5 py-12">
+          <div className="h-9 w-80 animate-pulse rounded-md bg-white/[0.04]" />
+          <div className="h-[600px] animate-pulse rounded-xl bg-white/[0.03]" />
         </div>
       </>
     );
   }
 
-  const { cohort, bmr, dir, topk, net, rows } = view;
+  const { cohort, bmr, dir, net, rows } = view;
+  const cmpDir: "ME" | "CO" = dir === "ME" ? "ME" : "CO";
 
   return (
-    <>
+    <TooltipProvider delayDuration={150}>
       <SiteNav />
+      <main className="mx-auto max-w-[1400px] px-5 pb-16">
+        <h1 className="pt-9 pb-6 font-serif text-[26px] leading-tight tracking-tight text-foreground">
+          Mutual exclusivity &amp; co-occurrence of driver mutations
+        </h1>
 
-      <main>
-        {/* Hero — compact: mono eyebrow + modest serif title (critique: no giant H1 here) */}
-        <div className="mx-auto max-w-[1640px] px-5 pt-10">
-          <div className="eyebrow mb-3">driver interaction atlas</div>
-          <h1 className="max-w-3xl font-serif text-[28px] leading-tight tracking-tight text-foreground md:text-[34px]">
-            Mutual-exclusivity &amp; co-occurrence of driver mutations
-          </h1>
-          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground-strong">
-            Networks inferred by DIALECT across {atlas.cohorts.length} cancer cohorts and three
-            background-mutation-rate models. Switch the model to see how the dependencies hold up.
-          </p>
-        </div>
-
-        {/* Sticky control bar */}
-        <div className="sticky top-14 z-30 mt-7 border-y border-border bg-background/85 backdrop-blur-md">
-          <div className="mx-auto flex max-w-[1640px] flex-wrap items-center gap-x-5 gap-y-3 px-5 py-3">
+        {/* Controls — three consistent dropdowns */}
+        <div className="flex flex-wrap items-end gap-4">
+          <Field label="Cohort">
             <CohortCombobox atlas={atlas} value={cohort.id} onChange={(c) => setHash({ c })} />
-            <div className="flex items-center gap-3 font-mono text-xs text-muted-foreground">
-              <span className="tnum">N={fmtInt(cohort.n_samples)}</span>
-              <span className="text-border">·</span>
-              <span className="tnum">TMB {cohort.median_tmb}</span>
-            </div>
-            <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-3">
-              <ControlLabel label="show">
-                <Segmented value={dir} onValueChange={(d) => setHash({ d })} options={DIR_OPTS} />
-              </ControlLabel>
-              <ControlLabel label="top-K">
-                <Segmented
-                  size="sm"
-                  value={String(topk)}
-                  onValueChange={(k) => setHash({ k })}
-                  options={TOPK_OPTS}
-                />
-              </ControlLabel>
-            </div>
+          </Field>
+          <Field label="Background rate model">
+            <Select value={bmr} onValueChange={(b) => setHash({ b })}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {atlas.bmrs.map((b) => (
+                  <SelectItem key={b} value={b}>
+                    {BMR_LABEL[b]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Show">
+            <Select value={dir} onValueChange={(d) => setHash({ d })}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["both", "ME", "CO"] as DirFilter[]).map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {SHOW_LABEL[d]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <div className="ml-auto flex items-center gap-3 pb-2 text-xs text-muted-foreground">
+            <span className="font-mono tnum">N {fmtInt(cohort.n_samples)}</span>
+            <span className="text-border">·</span>
+            <span className="font-mono tnum">TMB {cohort.median_tmb}</span>
+            {cohort.cbio && (
+              <>
+                <span className="text-border">·</span>
+                <a
+                  href={cohort.cbio}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="focus-ring inline-flex items-center gap-1 rounded text-muted-foreground-strong transition-colors hover:text-foreground"
+                >
+                  cBioPortal <ExternalLink className="size-3" />
+                </a>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="mx-auto max-w-[1640px] px-5">
-          {/* BMR comparison + selector */}
-          <div className="pt-6">
-            <SectionHead n="01" title="background-mutation-rate model" />
-            <CrossBmrStrip atlas={atlas} cohort={cohort} bmr={bmr} onChange={(b) => setHash({ b })} />
-          </div>
+        {/* One-line cross-model comparison */}
+        <p className="mt-4 text-xs text-muted-foreground">
+          {SHOW_LABEL[cmpDir]} pairs by model:{" "}
+          {atlas.bmrs.map((b, i) => (
+            <span key={b}>
+              {i > 0 && <span className="text-border"> · </span>}
+              <span className={b === bmr ? "font-mono tnum text-foreground" : "font-mono tnum"}>
+                {BMR_LABEL[b]} {fmtInt(bmrCounts(cohort, b)[cmpDir])}
+              </span>
+            </span>
+          ))}
+        </p>
 
-          {/* Network + inspector */}
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              {net.empty ? (
-                <div className="canvas-surface flex h-[600px] flex-col items-center justify-center gap-2 p-8 text-center">
-                  <p className="font-serif text-lg text-foreground">No dependencies to show</p>
-                  <p className="max-w-[40ch] text-sm text-muted-foreground">
-                    {cohort.cohort.replace(/_/g, " ")} has no{" "}
-                    {dir === "both" ? "ME/CO" : dir} pairs under {bmr.toUpperCase()} after the
-                    ε-filter. Try another BMR model or direction.
-                  </p>
-                </div>
-              ) : (
-                <NetworkView
-                  elements={net.elements}
-                  minW={net.minW}
-                  maxW={net.maxW}
-                  selected={selected}
-                  onSelect={onSelect}
-                />
-              )}
+        {/* Network */}
+        <div className="mt-5">
+          {net.empty ? (
+            <div className="canvas-surface flex h-[600px] flex-col items-center justify-center gap-2 p-8 text-center">
+              <p className="font-serif text-lg text-foreground">No dependencies to show</p>
+              <p className="max-w-[40ch] text-sm text-muted-foreground">
+                Try another model or change the Show filter.
+              </p>
             </div>
-            <div className="min-h-[600px] lg:col-span-1">
-              <PairDetail pair={selectedEdge} cohort={cohort} bmr={bmr} />
-            </div>
-          </div>
-
-          {/* Ranked dependencies table */}
-          <div className="pt-10">
-            <SectionHead n="02" title="ranked dependencies" />
-            <ResultTable
-              key={dir}
-              rows={rows}
+          ) : (
+            <NetworkView
+              elements={net.elements}
+              minW={net.minW}
+              maxW={net.maxW}
               selected={selected}
               onSelect={onSelect}
-              defaultSort={dir === "ME" ? { key: "rho", dir: "asc" } : { key: "lrt", dir: "desc" }}
             />
-          </div>
+          )}
+        </div>
+
+        {/* Ranked dependencies */}
+        <div className="mt-10">
+          <div className="eyebrow mb-3">ranked dependencies</div>
+          <ResultTable
+            key={dir}
+            rows={rows}
+            selected={selected}
+            onSelect={onSelect}
+            defaultSort={dir === "ME" ? { key: "rho", dir: "asc" } : { key: "lrt", dir: "desc" }}
+          />
         </div>
       </main>
-
       <Footer />
-    </>
+    </TooltipProvider>
   );
 }
