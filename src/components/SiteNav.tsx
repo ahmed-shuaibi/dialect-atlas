@@ -4,7 +4,10 @@ export function SiteNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-[#0a0a0a]/70 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-5">
-        <a href="#" className="font-serif text-[19px] tracking-tight text-foreground">
+        <a
+          href="#"
+          className="focus-ring rounded font-mono text-[15px] font-medium tracking-[0.12em] text-foreground"
+        >
           DIALECT Atlas
         </a>
         <a

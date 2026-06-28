@@ -1,172 +1,129 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ExternalLink } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { SiteNav } from "@/components/SiteNav";
 import { Footer } from "@/components/Footer";
-import { CohortCombobox } from "@/components/CohortCombobox";
-import { NetworkView, type NetSelection } from "@/components/NetworkView";
-import { ResultTable } from "@/components/ResultTable";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useHashState } from "@/lib/useHashState";
 import {
-  BMR_LABEL,
-  bmrCounts,
-  buildElements,
-  loadAtlas,
-  tableRows,
-  type Atlas,
+  AtlasControls,
+  CrossModelStrip,
+  EditorialHeader,
+  NetworkView,
+  ResultTable,
+  VIEW_DEFAULTS,
+  resolveCohort,
+  useAtlas,
+  useAtlasView,
+  useCohort,
   type Bmr,
   type DirFilter,
-} from "@/lib/atlas";
-import { useHashState } from "@/lib/useHashState";
-import { fmtInt } from "@/lib/utils";
+  type NetSelection,
+} from "@/features/atlas";
 
-const TOPK = 25;
-const SHOW_LABEL: Record<DirFilter, string> = {
-  both: "Both",
-  ME: "Mutually exclusive",
-  CO: "Co-occurring",
-};
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-      {label}
-      {children}
-    </label>
-  );
-}
+/** Wide shell capped at one container token; consistent gutter. */
+const SHELL = "mx-auto w-full max-w-[1320px] px-5 sm:px-8";
 
 export function App() {
-  const [atlas, setAtlas] = useState<Atlas | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [hash, setHash] = useHashState({ c: "TCGA__BRCA", b: "cbase", d: "both" });
+  const { atlas, error } = useAtlas();
+  const [hash, setHash] = useHashState({ ...VIEW_DEFAULTS });
   const [selected, setSelected] = useState<NetSelection | null>(null);
 
-  useEffect(() => {
-    loadAtlas().then(setAtlas).catch((e) => setErr(String(e)));
-  }, []);
-
   const onSelect = useCallback((s: NetSelection | null) => setSelected(s), []);
-  useEffect(() => setSelected(null), [hash.c, hash.b, hash.d]);
+  useEffect(() => setSelected(null), [hash.c, hash.b, hash.d, hash.f]);
 
-  const view = useMemo(() => {
-    if (!atlas) return null;
-    const cohort = atlas.cohorts.find((c) => c.id === hash.c) ?? atlas.cohorts[0];
-    const bmr = (atlas.bmrs.includes(hash.b as Bmr) ? hash.b : "cbase") as Bmr;
-    const dir = (["both", "ME", "CO"].includes(hash.d) ? hash.d : "both") as DirFilter;
-    return {
-      cohort,
-      bmr,
-      dir,
-      net: buildElements(cohort, bmr, dir, TOPK),
-      rows: tableRows(cohort, bmr, dir, TOPK),
-    };
-  }, [atlas, hash]);
+  // Resolve the selected cohort from the index, then lazily hydrate its heavy shard (edges).
+  const cohortMeta = atlas ? resolveCohort(hash, atlas) : null;
+  const { cohort: hydrated, error: cohortError } = useCohort(cohortMeta);
+  const view = useAtlasView(hash, atlas, hydrated);
 
-  if (err) {
+  if (error || cohortError) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6 text-center text-sm text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center p-6 text-center text-meta text-muted-foreground-strong">
         Failed to load atlas data.
       </div>
     );
   }
+
   if (!atlas || !view) {
     return (
       <>
         <SiteNav />
-        <div className="mx-auto max-w-[1400px] space-y-4 px-5 py-12">
-          <div className="h-9 w-80 animate-pulse rounded-md bg-white/[0.04]" />
-          <div className="h-[600px] animate-pulse rounded-xl bg-white/[0.03]" />
-        </div>
+        <main className={`${SHELL} space-y-section pt-page-top`}>
+          <div className="max-w-[680px] space-y-caption">
+            <div className="h-9 w-72 animate-pulse rounded-md bg-white/[0.04]" />
+            <div className="h-20 w-full animate-pulse rounded-md bg-white/[0.03]" />
+          </div>
+          <div className="flex flex-col gap-control-row sm:flex-row">
+            <div className="h-14 w-full animate-pulse rounded-md bg-white/[0.03] sm:w-[var(--control-width)]" />
+            <div className="h-14 w-full animate-pulse rounded-md bg-white/[0.03] sm:w-[var(--control-width)]" />
+            <div className="h-14 w-full animate-pulse rounded-md bg-white/[0.03] sm:w-[var(--control-width)]" />
+          </div>
+          {/* cross-model strip (3-up) */}
+          <div className="grid grid-cols-1 gap-control-row sm:grid-cols-3">
+            <div className="h-40 w-full animate-pulse rounded-lg bg-white/[0.03]" />
+            <div className="h-40 w-full animate-pulse rounded-lg bg-white/[0.03]" />
+            <div className="h-40 w-full animate-pulse rounded-lg bg-white/[0.03]" />
+          </div>
+          {/* ranked table — the hero */}
+          <div className="h-80 w-full animate-pulse rounded-lg bg-white/[0.03]" />
+          {/* topology — shares the network height token (no CLS) */}
+          <div className="h-network w-full animate-pulse rounded-lg bg-white/[0.03]" />
+        </main>
       </>
     );
   }
 
-  const { cohort, bmr, dir, net, rows } = view;
-  const cmpDir: "ME" | "CO" = dir === "ME" ? "ME" : "CO";
+  const { cohort, bmr, dir, excludePassengers, net, rows } = view;
+  const nModels = atlas.bmrs.filter((b) => cohort.bmrs[b]).length;
 
   return (
     <TooltipProvider delayDuration={150}>
       <SiteNav />
-      <main className="mx-auto max-w-[1400px] px-5 pb-16">
-        <h1 className="pt-9 pb-6 font-serif text-[26px] leading-tight tracking-tight text-foreground">
-          Mutual exclusivity &amp; co-occurrence of driver mutations
-        </h1>
+      <main className={`${SHELL} space-y-section pb-page-top pt-page-top`}>
+        <EditorialHeader />
 
-        {/* Controls — three consistent dropdowns */}
-        <div className="flex flex-wrap items-end gap-4">
-          <Field label="Cohort">
-            <CohortCombobox atlas={atlas} value={cohort.id} onChange={(c) => setHash({ c })} />
-          </Field>
-          <Field label="Background rate model">
-            <Select value={bmr} onValueChange={(b) => setHash({ b })}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {atlas.bmrs.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {BMR_LABEL[b]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Show">
-            <Select value={dir} onValueChange={(d) => setHash({ d })}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(["both", "ME", "CO"] as DirFilter[]).map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {SHOW_LABEL[d]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+        <AtlasControls
+          atlas={atlas}
+          cohort={cohort}
+          bmr={bmr}
+          dir={dir}
+          excludePassengers={excludePassengers}
+          onCohortChange={(c) => setHash({ c })}
+          onBmrChange={(b: Bmr) => setHash({ b })}
+          onDirChange={(d: DirFilter) => setHash({ d })}
+          onExcludePassengersChange={(next) => setHash({ f: next ? undefined : "0" })}
+        />
 
-          <div className="ml-auto flex items-center gap-3 pb-2 text-xs text-muted-foreground">
-            <span className="font-mono tnum">N {fmtInt(cohort.n_samples)}</span>
-            <span className="text-border">·</span>
-            <span className="font-mono tnum">TMB {cohort.median_tmb}</span>
-            {cohort.cbio && (
-              <>
-                <span className="text-border">·</span>
-                <a
-                  href={cohort.cbio}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="focus-ring inline-flex items-center gap-1 rounded text-muted-foreground-strong transition-colors hover:text-foreground"
-                >
-                  cBioPortal <ExternalLink className="size-3" />
-                </a>
-              </>
-            )}
-          </div>
-        </div>
+        <CrossModelStrip atlas={atlas} cohort={cohort} bmr={bmr} dir={dir} />
 
-        {/* One-line cross-model comparison */}
-        <p className="mt-4 text-xs text-muted-foreground">
-          {SHOW_LABEL[cmpDir]} pairs by model:{" "}
-          {atlas.bmrs.map((b, i) => (
-            <span key={b}>
-              {i > 0 && <span className="text-border"> · </span>}
-              <span className={b === bmr ? "font-mono tnum text-foreground" : "font-mono tnum"}>
-                {BMR_LABEL[b]} {fmtInt(bmrCounts(cohort, b)[cmpDir])}
-              </span>
-            </span>
-          ))}
-        </p>
+        {/* Ranked table — the hero */}
+        <section aria-label="Ranked dependencies" className="space-y-caption">
+          <h2 className="eyebrow">ranked dependencies</h2>
+          <ResultTable
+            key={dir}
+            rows={rows}
+            selected={selected}
+            onSelect={onSelect}
+            nModels={nModels}
+            defaultSort={dir === "ME" ? { key: "rho", dir: "asc" } : { key: "lrt", dir: "desc" }}
+          />
+        </section>
 
-        {/* Network */}
-        <div className="mt-5">
+        {/* Topology — secondary, collapsible (open by default; disclosure on mobile) */}
+        <details className="group space-y-caption" open>
+          <summary className="focus-ring inline-flex cursor-pointer list-none items-center gap-intra rounded-md text-eyebrow font-medium uppercase tracking-[0.22em] text-muted-foreground-stronger transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              className="size-3.5 transition-transform group-open:rotate-90"
+              aria-hidden
+            />
+            topology
+          </summary>
           {net.empty ? (
-            <div className="canvas-surface flex h-[600px] flex-col items-center justify-center gap-2 p-8 text-center">
-              <p className="font-serif text-lg text-foreground">No dependencies to show</p>
-              <p className="max-w-[40ch] text-sm text-muted-foreground">
-                Try another model or change the Show filter.
+            <div className="canvas-surface flex h-network flex-col items-center justify-center gap-label p-8 text-center">
+              <p className="font-serif text-h2 text-foreground">No dependencies to show</p>
+              <p className="max-w-[40ch] text-meta text-muted-foreground-strong">
+                No pairs for this cohort, model, and filter. Try another model or change the Show
+                filter.
               </p>
             </div>
           ) : (
@@ -178,19 +135,7 @@ export function App() {
               onSelect={onSelect}
             />
           )}
-        </div>
-
-        {/* Ranked dependencies */}
-        <div className="mt-10">
-          <div className="eyebrow mb-3">ranked dependencies</div>
-          <ResultTable
-            key={dir}
-            rows={rows}
-            selected={selected}
-            onSelect={onSelect}
-            defaultSort={dir === "ME" ? { key: "rho", dir: "asc" } : { key: "lrt", dir: "desc" }}
-          />
-        </div>
+        </details>
       </main>
       <Footer />
     </TooltipProvider>
