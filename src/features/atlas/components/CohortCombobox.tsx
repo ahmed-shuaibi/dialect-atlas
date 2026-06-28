@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -11,9 +12,10 @@ import {
 } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { cn, fmtInt } from "@/lib/utils";
-import { STUDY_LABEL, type Atlas, type Cohort } from "@/lib/atlas";
+import { STUDY_LABEL } from "@/features/atlas/lib/atlas-transform";
+import type { Atlas, CohortMeta } from "@/features/atlas/types";
 
-export const prettyCohort = (c: Cohort) => c.cohort.replace(/_/g, " ");
+export const prettyCohort = (c: CohortMeta) => c.cohort.replace(/_/g, " ");
 
 export function CohortCombobox({
   atlas,
@@ -28,7 +30,7 @@ export function CohortCombobox({
   const selected = atlas.cohorts.find((c) => c.id === value);
 
   const groups = useMemo(() => {
-    const m = new Map<string, Cohort[]>();
+    const m = new Map<string, CohortMeta[]>();
     for (const c of atlas.cohorts) {
       const arr = m.get(c.study);
       if (arr) arr.push(c);
@@ -40,23 +42,24 @@ export function CohortCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
+          variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="focus-ring flex h-9 w-[280px] items-center justify-between gap-2 rounded-md border border-border bg-white/[0.04] px-3 text-sm outline-none transition-colors hover:bg-white/[0.06]"
+          className="control-width w-full justify-between gap-2 px-3 font-normal sm:w-[var(--control-width)]"
         >
           {selected ? (
             <span className="flex min-w-0 items-baseline gap-2">
               <span className="truncate font-mono text-foreground">{prettyCohort(selected)}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-eyebrow text-muted-foreground-strong">
                 {STUDY_LABEL[selected.study] ?? selected.study}
               </span>
             </span>
           ) : (
-            <span className="text-muted-foreground">Select a cohort…</span>
+            <span className="text-muted-foreground-strong">Select a cohort…</span>
           )}
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[340px]" align="start">
         <Command>

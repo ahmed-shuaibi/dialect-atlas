@@ -14,8 +14,10 @@ function readHash(): Record<string, string> {
 }
 
 /**
- * Tiny shareable URL-state hook: keeps a flat string map in the location hash so
- * every view (cohort/BMR/direction/top-K/selected pair) is a bookmarkable link.
+ * Tiny shareable URL-state hook: keeps a flat string map in the location hash so the view is a
+ * bookmarkable link. Four keys (see VIEW_DEFAULTS): c (cohort) · b (BMR model) · d (direction) ·
+ * f (passenger filter). top-K is a fixed constant and the selected pair is local component state;
+ * neither is hashed.
  */
 export function useHashState(defaults: Record<string, string>) {
   const [state, setState] = useState<Record<string, string>>(() => ({
