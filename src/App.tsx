@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronRight } from "lucide-react";
 import { SiteNav } from "@/components/SiteNav";
 import { Footer } from "@/components/Footer";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -58,16 +57,16 @@ export function App() {
             <div className="h-14 w-full animate-pulse rounded-md bg-white/[0.03] sm:w-[var(--control-width)]" />
             <div className="h-14 w-full animate-pulse rounded-md bg-white/[0.03] sm:w-[var(--control-width)]" />
           </div>
+          {/* dependency network — the hero visual, shares the network height token (no CLS) */}
+          <div className="h-network w-full animate-pulse rounded-lg bg-white/[0.03]" />
           {/* cross-model strip (3-up) */}
           <div className="grid grid-cols-1 gap-control-row sm:grid-cols-3">
             <div className="h-40 w-full animate-pulse rounded-lg bg-white/[0.03]" />
             <div className="h-40 w-full animate-pulse rounded-lg bg-white/[0.03]" />
             <div className="h-40 w-full animate-pulse rounded-lg bg-white/[0.03]" />
           </div>
-          {/* ranked table — the hero */}
+          {/* ranked table */}
           <div className="h-80 w-full animate-pulse rounded-lg bg-white/[0.03]" />
-          {/* topology — shares the network height token (no CLS) */}
-          <div className="h-network w-full animate-pulse rounded-lg bg-white/[0.03]" />
         </main>
       </>
     );
@@ -80,7 +79,7 @@ export function App() {
     <TooltipProvider delayDuration={150}>
       <SiteNav />
       <main className={`${SHELL} space-y-section pb-page-top pt-page-top`}>
-        <EditorialHeader />
+        <EditorialHeader cohorts={atlas.cohorts.length} models={atlas.bmrs.length} />
 
         <AtlasControls
           atlas={atlas}
@@ -94,30 +93,9 @@ export function App() {
           onExcludePassengersChange={(next) => setHash({ f: next ? undefined : "0" })}
         />
 
-        <CrossModelStrip atlas={atlas} cohort={cohort} bmr={bmr} dir={dir} />
-
-        {/* Ranked table — the hero */}
-        <section aria-label="Ranked dependencies" className="space-y-caption">
-          <h2 className="eyebrow">ranked dependencies</h2>
-          <ResultTable
-            key={dir}
-            rows={rows}
-            selected={selected}
-            onSelect={onSelect}
-            nModels={nModels}
-            defaultSort={dir === "ME" ? { key: "rho", dir: "asc" } : { key: "lrt", dir: "desc" }}
-          />
-        </section>
-
-        {/* Topology — secondary, collapsible (open by default; disclosure on mobile) */}
-        <details className="group space-y-caption" open>
-          <summary className="focus-ring inline-flex cursor-pointer list-none items-center gap-intra rounded-md text-eyebrow font-medium uppercase tracking-[0.22em] text-muted-foreground-stronger transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              className="size-3.5 transition-transform group-open:rotate-90"
-              aria-hidden
-            />
-            topology
-          </summary>
+        {/* Dependency network — the hero visual, leading the page */}
+        <section aria-label="Dependency network" className="space-y-caption">
+          <h2 className="eyebrow">dependency network</h2>
           {net.empty ? (
             <div className="canvas-surface flex h-network flex-col items-center justify-center gap-label p-8 text-center">
               <p className="font-serif text-h2 text-foreground">No dependencies to show</p>
@@ -135,7 +113,22 @@ export function App() {
               onSelect={onSelect}
             />
           )}
-        </details>
+        </section>
+
+        <CrossModelStrip atlas={atlas} cohort={cohort} bmr={bmr} dir={dir} />
+
+        {/* Ranked dependencies — the analytical backbone below the visual */}
+        <section aria-label="Ranked dependencies" className="space-y-caption">
+          <h2 className="eyebrow">ranked dependencies</h2>
+          <ResultTable
+            key={dir}
+            rows={rows}
+            selected={selected}
+            onSelect={onSelect}
+            nModels={nModels}
+            defaultSort={dir === "ME" ? { key: "rho", dir: "asc" } : { key: "lrt", dir: "desc" }}
+          />
+        </section>
       </main>
       <Footer />
     </TooltipProvider>

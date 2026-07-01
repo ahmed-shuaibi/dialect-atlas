@@ -61,13 +61,14 @@
   --control-width: 13.5rem; /* 216 */
 
   /* single network-height source of truth, shared by NetworkView, its lazy fallback, and the
-     loading skeleton so the graph never causes layout shift (CLS). */
-  --network-height: clamp(300px, 55vh, 560px);
+     loading skeleton so the graph never causes layout shift (CLS). Leads the page as the hero
+     visual, so it earns real presence. */
+  --network-height: clamp(340px, 58vh, 600px);
 }
 
 @media (min-width: 640px) {
   :root {
-    --network-height: clamp(300px, 70vh, 560px);
+    --network-height: clamp(380px, 74vh, 660px);
   }
 }
 

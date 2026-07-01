@@ -8,10 +8,11 @@ import { EdgeSwatch } from "@/components/ui/badge";
  * serif voice that owns the heading zone — the nav wordmark reads mono/sans so the h1 stays the
  * clear anchor (SiteNav is out of scope here; not edited).
  *
- * No props — static editorial content. No interactive chrome: the full ρ/LRT/τ tooltips live on
- * the ResultTable column headers where they're contextual; here the plain-language def is enough.
+ * Cohort / model counts are derived from the loaded atlas (not hardcoded) so they never go stale
+ * when cohorts are added. No interactive chrome: the full ρ/LRT/τ tooltips live on the ResultTable
+ * column headers where they're contextual; here the plain-language def is enough.
  */
-export function EditorialHeader() {
+export function EditorialHeader({ cohorts, models }: { cohorts: number; models: number }) {
   return (
     <header className="max-w-[680px]">
       <p className="eyebrow">dialect atlas</p>
@@ -25,8 +26,8 @@ export function EditorialHeader() {
         <strong className="text-foreground">mutually exclusive</strong> drivers;{" "}
         <strong className="text-foreground">amber, dashed</strong> links mark{" "}
         <strong className="text-foreground">co-occurring</strong> drivers. Dependencies are ranked
-        within each of <span className="font-mono tnum text-foreground">69</span> cohorts and scored
-        for robustness across <span className="font-mono tnum text-foreground">3</span>{" "}
+        within each of <span className="font-mono tnum text-foreground">{cohorts}</span> cohorts and
+        scored for robustness across <span className="font-mono tnum text-foreground">{models}</span>{" "}
         background-rate models.
       </p>
 
