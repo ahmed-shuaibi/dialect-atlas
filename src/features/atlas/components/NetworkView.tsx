@@ -219,6 +219,23 @@ export function NetworkView({
       const d = e.target.data();
       onSelect({ a: d.source, b: d.target, type: d.type });
     });
+    // Tapping a node opens the detail for its STRONGEST incident pair (max |ρ|), so the whole
+    // node is a hit target for the popover — not just the thin edge.
+    cy.on("tap", "node", (e) => {
+      const edges = e.target.connectedEdges();
+      if (!edges.length) return;
+      let best = edges[0];
+      let bestEff = -Infinity;
+      edges.forEach((ed) => {
+        const eff = (ed.data("effect") as number | undefined) ?? 0;
+        if (eff > bestEff) {
+          bestEff = eff;
+          best = ed;
+        }
+      });
+      const d = best.data();
+      onSelect({ a: d.source, b: d.target, type: d.type });
+    });
     cy.on("tap", (e) => {
       if (e.target === cy) onSelect(null);
     });

@@ -1,13 +1,16 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
 import { Badge, EdgeSwatch } from "@/components/ui/badge";
+import { Popover, PopoverContent } from "@/components/ui/popover";
 import { InfoTip } from "@/features/atlas/components/InfoTip";
-import { ContingencyRow } from "@/features/atlas/components/ContingencyRow";
+import { PairPopover } from "@/features/atlas/components/PairPopover";
+import { css } from "@/lib/motion";
 import { cn, fmtInt, fmtLrt, fmtRho, fmtTau } from "@/lib/utils";
-import type { Row } from "@/features/atlas/types";
+import type { Atlas, Bmr, Cohort, Row } from "@/features/atlas/types";
 import type { NetSelection } from "@/features/atlas/components/NetworkView";
 
-type SortKey = "rho" | "lrt" | "tau11" | "n11";
+type SortKey = "rho" | "lrt" | "tau11" | "n00";
 
 type NumCol = {
   key: SortKey;
@@ -44,11 +47,11 @@ const NUM_COLS: NumCol[] = [
     mobileHidden: true,
   },
   {
-    key: "n11",
+    key: "n00",
     label: "co-mut",
     tip: "About co-mutated count",
-    help: "Number of tumors with a driver mutation in both genes (top-left cell of the 2×2 contingency table).",
-    fmt: (r) => fmtInt(r.n11),
+    help: "Observed number of tumors mutated in both genes (any mutation) — the both-mutated top-left cell of the 2×2 contingency table. A raw count, so it exceeds the driver-latent τ₁₁ estimate.",
+    fmt: (r) => fmtInt(r.n00),
     mobileHidden: true,
   },
 ];
@@ -134,6 +137,9 @@ export function ResultTable({
   onSelect,
   defaultSort,
   nModels,
+  cohort,
+  atlas,
+  bmr,
 }: {
   rows: Row[];
   selected: NetSelection | null;
@@ -141,6 +147,10 @@ export function ResultTable({
   defaultSort: { key: SortKey; dir: "asc" | "desc" };
   /** Number of background-rate models available for this cohort (the robustness denominator). */
   nModels: number;
+  /** Hydrated cohort + atlas index + active model — threaded to the per-row PairPopover. */
+  cohort: Cohort;
+  atlas: Atlas;
+  bmr: Bmr;
 }) {
   const [sort, setSort] = useState(defaultSort);
 
@@ -159,7 +169,8 @@ export function ResultTable({
   return (
     <div className="space-y-label">
       <p className="text-meta text-muted-foreground-strong">
-        Select a pair to expand its 2×2 contingency table and highlight it in the network.
+        Select a pair for its stats, 2×2 contingency, and cross-model robustness — and to highlight
+        it in the network.
       </p>
       <div className="surface relative overflow-hidden">
         {/* scroll-shadow affordance: a right-edge fade cues horizontal overflow on narrow
@@ -192,8 +203,9 @@ export function ResultTable({
                   <span className="inline-flex items-center justify-end gap-label">
                     <InfoTip label="About cross-model robustness">
                       How many of the cohort&apos;s {nModels} background-rate models recover this
-                      same gene-effect pair in the same direction. {nModels}/{nModels} = robust to
-                      the BMR choice.
+                      same gene-effect pair in the same direction. A solid teal dot marks a pair all{" "}
+                      {nModels} models agree on ({nModels}/{nModels}, robust to the BMR choice); a
+                      hollow dot marks a split.
                     </InfoTip>
                     Models
                   </span>
@@ -208,15 +220,18 @@ export function ResultTable({
                   selected.b === r.gb &&
                   selected.type === r.type;
                 const key = `${r.ga}-${r.gb}-${r.type}-${i}`;
-                const select = () => onSelect(isSel ? null : { a: r.ga, b: r.gb, type: r.type });
+                const toggle = () => onSelect(isSel ? null : { a: r.ga, b: r.gb, type: r.type });
                 return (
                   <ResultRow
                     key={key}
                     r={r}
                     isSel={isSel}
-                    colCount={colCount}
                     nModels={nModels}
-                    onSelect={select}
+                    cohort={cohort}
+                    atlas={atlas}
+                    bmr={bmr}
+                    onToggle={toggle}
+                    onClose={() => onSelect(null)}
                   />
                 );
               })}
@@ -241,37 +256,55 @@ export function ResultTable({
 function ResultRow({
   r,
   isSel,
-  colCount,
   nModels,
-  onSelect,
+  cohort,
+  atlas,
+  bmr,
+  onToggle,
+  onClose,
 }: {
   r: Row;
   isSel: boolean;
-  colCount: number;
   nModels: number;
-  onSelect: () => void;
+  cohort: Cohort;
+  atlas: Atlas;
+  bmr: Bmr;
+  /** Row click / Enter: toggle this pair's selection. */
+  onToggle: () => void;
+  /** Esc or click-out of the popover: clear the selection. */
+  onClose: () => void;
 }) {
+  const rowRef = useRef<HTMLTableRowElement>(null);
+  // When selection arrives from the network (or sort reorders), pull the open row into view so
+  // its anchored popover never opens against an off-screen row.
+  useEffect(() => {
+    if (isSel) rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isSel]);
+
   return (
-    <>
-      <tr
-        role="button"
-        tabIndex={0}
-        aria-expanded={isSel}
-        aria-label={`${r.ga} ${r.gb} ${r.type}, expand contingency table`}
-        onClick={onSelect}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
-        className={cn(
-          "group cursor-pointer border-b border-border/50 transition-colors focus-ring focus-visible:relative focus-visible:z-[1]",
-          isSel
-            ? "bg-white/[0.05] ring-1 ring-inset ring-brand"
-            : "hover:bg-white/[0.03]",
-        )}
-      >
+    <Popover open={isSel} onOpenChange={(o) => !o && onClose()}>
+      <PopoverPrimitive.Anchor asChild>
+        <tr
+          ref={rowRef}
+          role="button"
+          tabIndex={0}
+          aria-expanded={isSel}
+          aria-label={`${r.ga} ${r.gb} ${r.type}, open pair detail`}
+          onClick={onToggle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggle();
+            }
+          }}
+          style={{ transitionDuration: css.durMs.fast }}
+          className={cn(
+            "group cursor-pointer border-b border-border/50 transition-colors focus-ring focus-visible:relative focus-visible:z-[1]",
+            isSel
+              ? "bg-white/[0.05] ring-1 ring-inset ring-brand"
+              : "hover:bg-white/[0.03]",
+          )}
+        >
         <td className="w-8 px-2 text-center align-middle">
           <ChevronRight
             aria-hidden
@@ -311,21 +344,46 @@ function ResultRow({
           {fmtTau(r.tau11)}
         </td>
         <td className="hidden px-4 py-0 align-middle text-right font-mono text-meta text-muted-foreground-strong tnum sm:table-cell">
-          {fmtInt(r.n11)}
+          {fmtInt(r.n00)}
         </td>
         <td className="px-4 py-0 align-middle text-right">
           <span
-            className={cn(
-              "font-mono text-meta tnum",
-              r.replicatedIn === nModels ? "text-brand" : "text-muted-foreground-strong",
-            )}
+            className="inline-flex items-center justify-end gap-1.5"
             title={`Recovered in ${r.replicatedIn} of ${nModels} background-rate models`}
           >
-            {r.replicatedIn}/{nModels}
+            {/* robustness dot: solid = every model agrees, hollow = split */}
+            <span
+              aria-hidden
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                r.replicatedIn === nModels
+                  ? "bg-brand"
+                  : "border border-muted-foreground-strong",
+              )}
+            />
+            <span
+              className={cn(
+                "font-mono text-meta tnum",
+                r.replicatedIn === nModels ? "text-brand" : "text-muted-foreground-strong",
+              )}
+            >
+              {r.replicatedIn}/{nModels}
+            </span>
           </span>
         </td>
       </tr>
-      {isSel && <ContingencyRow r={r} colSpan={colCount} />}
-    </>
+      </PopoverPrimitive.Anchor>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={6}
+        collisionPadding={12}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        style={{ animationDuration: css.durMs.base, animationTimingFunction: css.easeOut }}
+      >
+        <PairPopover row={r} cohort={cohort} atlas={atlas} bmr={bmr} />
+      </PopoverContent>
+    </Popover>
   );
 }

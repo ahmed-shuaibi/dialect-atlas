@@ -10,7 +10,6 @@ export { useAtlas, useCohort } from "@/features/atlas/hooks/useAtlas";
 export { VIEW_DEFAULTS, resolveCohort, useAtlasView } from "@/features/atlas/hooks/useAtlasView";
 
 // Components
-export { AtlasControls } from "@/features/atlas/components/AtlasControls";
 export { CrossModelStrip } from "@/features/atlas/components/CrossModelStrip";
 export { EditorialHeader } from "@/features/atlas/components/EditorialHeader";
 // Lazy NetworkView: Cytoscape ships in its own chunk (see NetworkView.lazy + manualChunks).

@@ -7,8 +7,12 @@ import type { Atlas, Bmr, Cohort, CohortMeta, DirFilter, Row } from "@/features/
 
 export const TOPK = 25;
 
-/** Default hash state. Direction defaults to ME (not "both"); passenger filter ON. */
-export const VIEW_DEFAULTS = { c: "TCGA__BRCA", b: "cbase", d: "ME", f: "1" } as const;
+/**
+ * Default hash state. Cohort defaults to LUAD (a dense, most-cited TCGA lung cohort) so first
+ * paint is a real drawn network, not an empty canvas. Direction defaults to ME (not "both");
+ * passenger filter ON.
+ */
+export const VIEW_DEFAULTS = { c: "TCGA__LUAD", b: "cbase", d: "ME", f: "1" } as const;
 
 /** A validated, coerced view derived from the raw URL hash. */
 export interface AtlasView {
