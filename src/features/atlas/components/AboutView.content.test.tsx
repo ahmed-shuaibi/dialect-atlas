@@ -75,6 +75,20 @@ describe("AboutView content contract", () => {
     expect(within(release!).getByText("3")).toBeInTheDocument();
   });
 
+  it("groups every equation with a centered visual and aligned footer", () => {
+    const { container } = render(<AboutView bundle={bundle} cohort={null} />);
+    const formulation = container.querySelector('[aria-labelledby="formulation-heading"] > div');
+    const steps = Array.from(container.querySelectorAll(".formulation-step"));
+
+    expect(formulation).toHaveClass("gap-px");
+    expect(steps).toHaveLength(3);
+    steps.forEach((step) => {
+      expect(step).toHaveClass("grid", "grid-rows-[auto_1fr_auto]");
+      expect(step.querySelector(".formulation-visual")).toHaveClass("h-40");
+      expect(step.lastElementChild).toHaveClass("min-h-24");
+    });
+  });
+
   it("operates the method carousel from the keyboard and exposes its state", async () => {
     const user = userEvent.setup();
     render(<AboutView bundle={bundle} cohort={null} />);

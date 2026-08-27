@@ -194,16 +194,21 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
 
       <section aria-labelledby="formulation-heading" className="mt-12">
         <h2 id="formulation-heading" className="sr-only">DIALECT formulation</h2>
-        <div className="grid overflow-hidden rounded-[28px] border border-line bg-line shadow-soft lg:grid-cols-3">
+        <div className="grid gap-px overflow-hidden rounded-[28px] border border-line bg-line shadow-soft lg:grid-cols-3">
           {FORMULATION.map((step, index) => (
-            <article key={step.label} className="formulation-step flex min-h-80 flex-col bg-paper p-6 sm:p-7">
-              <div className="flex items-center justify-between gap-4">
-                <span className="font-mono text-xs text-muted">0{index + 1}</span>
+            <article
+              key={step.label}
+              className="formulation-step grid min-h-80 grid-rows-[auto_1fr_auto] gap-4 bg-paper p-6 sm:p-7"
+            >
+              <span className="font-mono text-xs text-muted">0{index + 1}</span>
+              <div className="formulation-visual flex h-40 w-full flex-col items-center justify-center gap-5 py-2">
                 <span className="font-mono text-sm font-medium text-brand">{step.formula}</span>
+                {step.visual}
               </div>
-              <div className="mt-8 flex min-h-28 items-center">{step.visual}</div>
-              <h3 className="mt-auto text-2xl font-semibold">{step.label}</h3>
-              <p className="mt-2 text-base leading-7 text-muted">{step.caption}</p>
+              <div className="min-h-24">
+                <h3 className="text-2xl font-semibold">{step.label}</h3>
+                <p className="mt-2 text-base leading-7 text-muted">{step.caption}</p>
+              </div>
             </article>
           ))}
         </div>

@@ -199,15 +199,15 @@
     animation: view-enter 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
 
-  .formulation-step > div:nth-child(2) {
+  .formulation-visual {
     animation: formulation-breathe 5s ease-in-out infinite;
   }
 
-  .formulation-step:nth-child(2) > div:nth-child(2) {
+  .formulation-step:nth-child(2) .formulation-visual {
     animation-delay: 240ms;
   }
 
-  .formulation-step:nth-child(3) > div:nth-child(2) {
+  .formulation-step:nth-child(3) .formulation-visual {
     animation-delay: 480ms;
   }
 }
@@ -225,12 +225,10 @@
 
 @keyframes formulation-breathe {
   0%, 100% {
-    opacity: 0.82;
-    transform: translateY(0);
+    opacity: 0.86;
   }
   50% {
     opacity: 1;
-    transform: translateY(-3px);
   }
 }
 

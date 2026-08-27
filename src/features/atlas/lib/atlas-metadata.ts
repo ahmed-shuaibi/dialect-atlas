@@ -25,7 +25,8 @@ export type ComparisonMethodMetadata = MethodMetadata & {
 };
 
 export const ATLAS_LINKS = {
-  contactEmail: "ahmed.shuaibi@hey.com",
+  contactEmail: "shuaibi.ahmed.a@gmail.com",
+  personalSite: "https://ahmedshuaibi.com",
   paper: "https://doi.org/10.1101/2024.04.24.590995",
   source: "https://github.com/raphael-group/dialect",
 } as const;
