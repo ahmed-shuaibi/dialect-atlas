@@ -47,11 +47,19 @@ assert(
   html.includes(`src="${basePath}assets/`) && html.includes(`href="${basePath}assets/`),
   `JavaScript and CSS assets must use base path ${basePath}`,
 );
+const themeBootstrapPosition = html.indexOf("theme-bootstrap.js");
+const appBundlePosition = html.indexOf(`${basePath}assets/`);
+assert(
+  themeBootstrapPosition >= 0 && themeBootstrapPosition < appBundlePosition,
+  "same-origin theme bootstrap must load before the application bundle",
+);
 
 await Promise.all([
   assertFile("brand/dialect-icon.png"),
   assertFile("brand/dialect-mark.png"),
   assertFile("brand/dialect-wordmark.png"),
+  assertFile("theme-bootstrap.js"),
+  assertFile("_headers"),
   assertFile("robots.txt"),
   assertFile("sitemap.xml"),
   assertFile(`data/releases/${RELEASE}/manifest.json`),
@@ -61,7 +69,15 @@ await Promise.all([
 
 const robots = await readFile(path.join(DIST, "robots.txt"), "utf8");
 const sitemap = await readFile(path.join(DIST, "sitemap.xml"), "utf8");
+const headers = await readFile(path.join(DIST, "_headers"), "utf8");
 assert(robots.includes(`${DEFAULT_SITE_URL}/sitemap.xml`), "robots.txt sitemap URL is stale");
 assert(sitemap.includes(`<loc>${DEFAULT_SITE_URL}/</loc>`), "sitemap canonical URL is stale");
+assert(headers.includes("X-Frame-Options: DENY"), "Cloudflare frame protection is missing");
+assert(headers.includes("frame-ancestors 'none'"), "Cloudflare CSP is missing frame protection");
+assert(
+  headers.includes(`/data/releases/${RELEASE}/*`) && headers.includes("immutable"),
+  "immutable release cache contract is missing",
+);
+assert(headers.includes(":project.pages.dev"), "Pages preview noindex policy is missing");
 
 process.stdout.write(`Deployment valid for ${siteUrl}${basePath}\n`);

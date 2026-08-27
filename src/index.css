@@ -6,7 +6,7 @@
   --canvas: #f4f1ea;
   --paper: #fcfaf6;
   --ink: #182025;
-  --muted: #5f686c;
+  --muted: #5d676b;
   --line: #d7d2c9;
   --sand: #ebe6dc;
   --sand-deep: #dfd8cc;
@@ -19,10 +19,36 @@
   --support: #356b54;
   --support-soft: #e3eee8;
   --alert: #a23e35;
+  --overlay: rgba(24, 32, 37, 0.28);
+  --shadow-color: rgba(24, 32, 37, 0.07);
+  --network-node: #fffdf9;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #171a1b;
+  --paper: #222628;
+  --ink: #f2efe8;
+  --muted: #aeb5b5;
+  --line: #3b4142;
+  --sand: #2c3132;
+  --sand-deep: #373d3e;
+  --brand: #74c9cf;
+  --brand-soft: #203b3e;
+  --me: #91bde3;
+  --me-soft: #253747;
+  --co: #e3a18e;
+  --co-soft: #452e2a;
+  --support: #89cba6;
+  --support-soft: #243c31;
+  --alert: #ef9b91;
+  --overlay: rgba(4, 6, 7, 0.7);
+  --shadow-color: rgba(0, 0, 0, 0.22);
+  --network-node: #282d2f;
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
+  --font-sans: "Raleway Variable", Raleway, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
   --color-canvas: var(--canvas);
@@ -42,7 +68,7 @@
   --color-support-soft: var(--support-soft);
   --color-alert: var(--alert);
 
-  --shadow-soft: 0 1px 2px rgba(24, 32, 37, 0.04), 0 10px 28px rgba(24, 32, 37, 0.055);
+  --shadow-soft: 0 1px 2px var(--shadow-color), 0 12px 34px var(--shadow-color);
 }
 
 @layer base {
@@ -64,12 +90,16 @@
     background: var(--canvas);
     color: var(--ink);
     font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
   button,
-  input {
+  input,
+  select,
+  textarea {
     font: inherit;
   }
 
@@ -81,7 +111,16 @@
   h1,
   h2,
   h3 {
+    font-weight: 650;
     text-wrap: balance;
+  }
+
+  a,
+  button,
+  input,
+  select,
+  summary {
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -91,15 +130,6 @@
     margin-inline: auto;
   }
 
-  .eyebrow {
-    color: var(--muted);
-    font-size: 0.66rem;
-    font-weight: 750;
-    letter-spacing: 0.14em;
-    line-height: 1.1;
-    text-transform: uppercase;
-  }
-
   .focus-ring:focus-visible {
     outline: 3px solid var(--brand);
     outline-offset: 3px;
@@ -107,9 +137,36 @@
 
   .surface-card {
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 24px;
     background: var(--paper);
     box-shadow: var(--shadow-soft);
+  }
+
+  :root[data-theme="dark"] .brand-wordmark {
+    filter: brightness(0) invert(1);
+    opacity: 0.9;
+  }
+
+  .react-flow__node-gene:focus-visible .network-gene-node {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 4px var(--brand-soft);
+  }
+
+  .react-flow__edge.selectable:focus-visible .react-flow__edge-path {
+    stroke: var(--brand) !important;
+    filter: drop-shadow(0 0 2px var(--brand));
+  }
+
+  .react-flow__attribution {
+    border-radius: 999px 0 0;
+    background: color-mix(in srgb, var(--paper) 82%, transparent) !important;
+    color: var(--muted);
+    font-size: 10px;
+    opacity: 0.92;
+  }
+
+  .react-flow__attribution a {
+    color: inherit;
   }
 }
 

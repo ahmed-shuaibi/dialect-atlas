@@ -5,12 +5,13 @@ exclusivity and co-occurrence between somatic gene-effect pairs in cancer.
 
 [Explore the Atlas](https://dialectcanceratlas.com/)
 
-Choose a cancer type and cohort, then explore significant interactions as a
-network or compact ranked list. The default view requires the same pair and
-direction at `q < 0.01` under CBaSE, DIG, and a real MutSigCV2 background;
-CBaSE fallback features are not counted as MutSigCV2 support. Individual BMR
-views and Fisher, DISCOVER, MEGSA, WeSME, and WeSCO comparisons are available
-without crowding the primary view.
+Choose a cancer type and cohort, then explore ranked mutually exclusive and
+co-occurring interactions in one list or an interactive network. The default
+candidate view requires the same pair and direction under CBaSE, DIG, and a real
+MutSigCV2 background; CBaSE fallback features are not counted as MutSigCV2
+support. `Significant only` applies the selected q-value cutoff across all three.
+Individual BMR views and Fisher, DISCOVER, MEGSA, WeSME, and WeSCO comparisons
+remain available in the same concise interface.
 
 The published `k100-2026-08-26` release contains every evaluated pair from up
 to 100 count-ranked, provider-eligible features in each of 71 TCGA, MSK-IMPACT,

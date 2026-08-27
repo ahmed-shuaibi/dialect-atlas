@@ -136,22 +136,27 @@ describe("comparison row construction and sorting", () => {
       <CompareView
         data={fixture()}
         manifestMethods={manifestMethods}
-        mode="consensus"
-        direction="ME"
-        onDirectionChange={vi.fn()}
+        qThreshold={0.01}
         onSelect={vi.fn()}
       />,
     );
 
-    const table = screen.getByRole("table");
-    const cbaseHeader = screen.getByRole("columnheader", { name: /CBaSE q/ });
+    expect(screen.getByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
+    const meSection = screen.getByRole("region", { name: "Mutually exclusive" });
+    expect(within(meSection).getByRole("heading", { name: "Mutually exclusive" }).parentElement?.parentElement)
+      .toHaveClass("flex-col", "sm:flex-row");
+    expect(within(meSection).getByRole("combobox", { name: "Sort ME comparison by" }))
+      .toHaveClass("w-full", "sm:w-auto");
+    const table = within(meSection).getByRole("table");
+    const cbaseHeader = within(table).getByRole("columnheader", { name: "CBaSE" });
     expect(cbaseHeader).toHaveAttribute("aria-sort", "ascending");
     expect(
       within(table).getAllByRole("row").slice(1, 4).map((row) => row.textContent),
     ).toEqual(expect.arrayContaining([expect.stringContaining("C_M / D_N")]));
 
-    await user.click(screen.getByRole("button", { name: "Sort by Fisher" }));
-    const fisherHeader = screen.getByRole("columnheader", { name: /Fisher q/ });
+    await user.click(within(table).getByRole("button", { name: "Sort by Fisher" }));
+    const fisherHeader = within(table).getByRole("columnheader", { name: "Fisher" });
     expect(fisherHeader).toHaveAttribute("aria-sort", "ascending");
     let bodyRows = within(table).getAllByRole("row").slice(1);
     expect(bodyRows[0]).toHaveTextContent("G_M / H_N");
@@ -163,7 +168,7 @@ describe("comparison row construction and sorting", () => {
       expect.stringContaining("K_M / L_N"),
     ]);
 
-    await user.click(screen.getByRole("button", { name: "Sort by Fisher" }));
+    await user.click(within(table).getByRole("button", { name: "Sort by Fisher" }));
     expect(fisherHeader).toHaveAttribute("aria-sort", "descending");
     bodyRows = within(table).getAllByRole("row").slice(1);
     expect(bodyRows[0]).toHaveTextContent("J_M / Q_N");

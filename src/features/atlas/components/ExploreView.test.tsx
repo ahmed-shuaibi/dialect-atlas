@@ -11,28 +11,49 @@ const emptyData: CohortData = {
   mutsigCbaseFallbackFeatures: [],
 };
 
-describe("ExploreView zero state", () => {
-  it("offers callback-driven recovery without referring to the removed strict setting", () => {
-    const onDirectionChange = vi.fn();
-    const onOpenSettings = vi.fn();
+describe("ExploreView", () => {
+  it("offers one-step recovery when the significant-only filter has no results", () => {
+    const onSignificantOnlyChange = vi.fn();
+    render(
+      <ExploreView
+        data={emptyData}
+        mode="consensus"
+        display="list"
+        qThreshold={0.01}
+        significantOnly
+        onDisplayChange={() => undefined}
+        onSignificantOnlyChange={onSignificantOnlyChange}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("No pairs meet q < 0.01.")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Explore display" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /significant interactions/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /direction/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show ranked pairs" }));
+    expect(onSignificantOnlyChange).toHaveBeenCalledWith(false);
+  });
+
+  it("uses a compact gene search with a clear recovery action", () => {
     render(
       <ExploreView
         data={emptyData}
         mode="cbase"
         display="list"
-        direction="ME"
+        qThreshold={0.005}
+        significantOnly={false}
         onDisplayChange={() => undefined}
-        onDirectionChange={onDirectionChange}
-        onOpenSettings={onOpenSettings}
+        onSignificantOnlyChange={() => undefined}
         onSelect={() => undefined}
       />,
     );
 
-    expect(screen.getByText("No significant pairs in this view.")).toBeInTheDocument();
-    expect(screen.queryByText(/strict/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Show both directions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Choose another model" }));
-    expect(onDirectionChange).toHaveBeenCalledWith("all");
-    expect(onOpenSettings).toHaveBeenCalledOnce();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Find a gene" }), {
+      target: { value: "TP53" },
+    });
+    expect(screen.getByText("No pairs match that gene.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(screen.getByRole("searchbox", { name: "Find a gene" })).toHaveValue("");
   });
 });

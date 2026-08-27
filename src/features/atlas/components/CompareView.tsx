@@ -1,5 +1,14 @@
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { EvidenceStatus, type EvidenceState } from "@/components/ui/evidence-status";
+import { SearchField } from "@/components/ui/search-field";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   buildComparisonRows,
   comparisonMethods,
@@ -9,13 +18,7 @@ import {
   type CompareSortDirection,
 } from "@/features/atlas/components/compare-detail";
 import { fmtQ } from "@/features/atlas/lib/atlas-transform";
-import type {
-  AtlasMode,
-  CohortData,
-  Direction,
-  InteractionResult,
-} from "@/features/atlas/types";
-import { cn } from "@/lib/utils";
+import type { CohortData, Direction, InteractionResult } from "@/features/atlas/types";
 
 const DISPLAY_LIMIT = 30;
 
@@ -27,93 +30,59 @@ function EvidenceMark({
   direction: Direction;
 }) {
   if (!evidence?.tested || evidence.value == null) {
-    return (
-      <span className="font-mono text-xs text-muted" aria-label="Not reported">
-        —
-      </span>
-    );
+    return <EvidenceStatus state="missing" label="Not reported" />;
   }
-  const directionNote = evidence.assignedDirection
-    ? `; ${evidence.assignedDirection === "neutral" ? "neutral" : evidence.assignedDirection} direction`
-    : "";
-  const fallbackNote = evidence.fallback ? "; CBaSE fallback" : "";
   const oppositeSignificant =
     !evidence.supported &&
     evidence.value < evidence.method.threshold &&
     (evidence.assignedDirection === "ME" || evidence.assignedDirection === "CO") &&
     evidence.assignedDirection !== direction;
-  const significanceNote = evidence.supported
-    ? `significant for ${direction}`
+  const state: EvidenceState = evidence.fallback || oppositeSignificant
+    ? "warning"
+    : evidence.supported
+      ? "supported"
+      : "unsupported";
+  const significance = evidence.supported
+    ? `supports ${direction}`
     : oppositeSignificant
-      ? `significant for ${evidence.assignedDirection}; opposite to ${direction}`
-      : `not significant for ${direction}`;
+      ? `supports ${evidence.assignedDirection}, opposite to ${direction}`
+      : `does not support ${direction}`;
+  const fallback = evidence.fallback ? "; CBaSE fallback" : "";
+  const label = `${evidence.method.label}: ${significance}; ${evidence.method.measure} ${fmtQ(evidence.value)}${fallback}`;
   return (
-    <span
-      className="inline-flex flex-col items-center justify-center whitespace-nowrap"
-      title={`${evidence.method.label}: ${significanceNote}; ${evidence.method.measure} ${fmtQ(evidence.value)}${directionNote}${fallbackNote}`}
-    >
-      <span className="inline-flex items-baseline justify-center gap-1.5">
-        <span
-          aria-hidden
-          className={cn(
-            "text-sm font-black",
-            evidence.fallback || oppositeSignificant
-              ? "text-alert"
-              : evidence.supported
-                ? "text-support"
-                : "text-muted",
-          )}
-        >
-          {evidence.fallback || oppositeSignificant ? "△" : evidence.supported ? "✓" : "○"}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="focus-ring inline-flex rounded-full p-1">
+          <EvidenceStatus state={state} label={label} />
         </span>
-        <span
-          aria-hidden
-          className={cn(
-            "font-mono text-[11px] tabular-nums",
-            evidence.fallback || oppositeSignificant
-              ? "font-semibold text-alert"
-              : evidence.supported
-                ? "font-semibold text-ink"
-                : "text-muted",
-          )}
-        >
-          {fmtQ(evidence.value)}
-        </span>
-      </span>
-      {evidence.fallback && (
-        <span aria-hidden className="mt-0.5 text-[8px] font-bold leading-none text-alert">
-          CBaSE fallback
-        </span>
-      )}
-      <span className="sr-only">
-        {evidence.method.label}: {significanceNote}; {evidence.method.measure} {fmtQ(evidence.value)}
-        {directionNote}
-        {fallbackNote}
-      </span>
-    </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
-export type CompareViewProps = {
+function ComparisonSection({
+  data,
+  manifestMethods,
+  direction,
+  qThreshold,
+  query,
+  onSelect,
+}: {
   data: CohortData;
   manifestMethods: unknown;
-  mode: AtlasMode;
   direction: Direction;
-  onDirectionChange: (direction: Direction) => void;
+  qThreshold: number;
+  query: string;
   onSelect: (result: InteractionResult) => void;
-};
-
-export function CompareView(props: CompareViewProps) {
-  const { data, manifestMethods, direction, onDirectionChange, onSelect } = props;
+}) {
   const methods = useMemo(
-    () => comparisonMethods(direction, manifestMethods),
-    [direction, manifestMethods],
+    () => comparisonMethods(direction, manifestMethods, qThreshold),
+    [direction, manifestMethods, qThreshold],
   );
-  const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(DISPLAY_LIMIT);
   const [sortMethod, setSortMethod] = useState<CompareMethodId>("cbase");
-  const [sortDirection, setSortDirection] =
-    useState<CompareSortDirection>("ascending");
+  const [sortDirection, setSortDirection] = useState<CompareSortDirection>("ascending");
 
   useEffect(() => {
     if (!methods.some((method) => method.id === sortMethod)) {
@@ -121,30 +90,25 @@ export function CompareView(props: CompareViewProps) {
       setSortDirection("ascending");
     }
   }, [methods, sortMethod]);
-  useEffect(() => setVisible(DISPLAY_LIMIT), [direction, query, sortMethod, sortDirection]);
+  useEffect(() => setVisible(DISPLAY_LIMIT), [qThreshold, query, sortMethod, sortDirection]);
 
   const rows = useMemo(
     () => buildComparisonRows(data, direction, methods),
     [data, direction, methods],
   );
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = query.trim().toLocaleLowerCase("en-US");
   const filtered = useMemo(() => {
     const matching = normalizedQuery
-      ? rows.filter((row) =>
-          `${row.ga} ${row.gb}`.toLowerCase().includes(normalizedQuery),
-        )
+      ? rows.filter((row) => `${row.ga} ${row.gb}`.toLocaleLowerCase("en-US").includes(normalizedQuery))
       : rows;
     return sortComparisonRows(matching, sortMethod, sortDirection);
   }, [normalizedQuery, rows, sortDirection, sortMethod]);
   const shown = filtered.slice(0, visible);
-  const activeMethod =
-    methods.find((method) => method.id === sortMethod) ?? methods[0];
+  const activeMethod = methods.find((method) => method.id === sortMethod) ?? methods[0];
 
   const chooseSort = (method: CompareMethodId) => {
     if (method === sortMethod) {
-      setSortDirection((value) =>
-        value === "ascending" ? "descending" : "ascending",
-      );
+      setSortDirection((value) => (value === "ascending" ? "descending" : "ascending"));
       return;
     }
     setSortMethod(method);
@@ -152,117 +116,71 @@ export function CompareView(props: CompareViewProps) {
   };
 
   return (
-    <section aria-labelledby="compare-title">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
-        <h2
-          id="compare-title"
-          className="text-[clamp(1.8rem,4vw,3rem)] font-black leading-none tracking-[-0.045em]"
-        >
-          Compare methods
-        </h2>
-        <div
-          aria-label="Comparison direction"
-          className="flex border border-line bg-paper p-1"
-        >
-          {(["ME", "CO"] as const).map((value) => (
-            <Button
-              key={value}
-              variant={direction === value ? "primary" : "ghost"}
-              size="sm"
-              aria-pressed={direction === value}
-              onClick={() => onDirectionChange(value)}
-              className="rounded-none"
-            >
-              {value === "ME" ? "Mutually exclusive" : "Co-occurring"}
-            </Button>
-          ))}
+    <section aria-labelledby={`compare-${direction}`}>
+      <div className="mb-4 flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 id={`compare-${direction}`} className="text-2xl font-semibold">
+            {direction === "ME" ? "Mutually exclusive" : "Co-occurring"}
+          </h3>
+          <p className="mt-1 text-sm text-muted">{filtered.length} pairs supported by at least one method</p>
         </div>
-      </div>
-
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <label className="min-w-[15rem] flex-1 sm:max-w-sm">
-          <span className="sr-only">Search compared gene pairs</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search genes"
-            className="focus-ring w-full border border-line bg-paper px-3 py-2.5 text-sm outline-none placeholder:text-muted"
-          />
-        </label>
-
-        <div className="ml-auto flex items-center gap-2 md:hidden">
-          <label>
-            <span className="sr-only">Sort comparison by</span>
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto md:hidden">
+          <label className="min-w-0 flex-1 sm:flex-none">
+            <span className="sr-only">Sort {direction} comparison by</span>
             <select
-              aria-label="Sort comparison by"
+              aria-label={`Sort ${direction} comparison by`}
               value={sortMethod}
               onChange={(event) => {
                 setSortMethod(event.target.value as CompareMethodId);
                 setSortDirection("ascending");
               }}
-              className="focus-ring border border-line bg-paper px-3 py-2.5 text-xs font-bold outline-none"
+              className="focus-ring h-10 w-full min-w-0 rounded-full border border-line bg-paper px-3 text-sm font-semibold outline-none sm:w-auto"
             >
               {methods.map((method) => (
-                <option key={method.id} value={method.id}>
-                  {method.label} ({method.measure})
-                </option>
+                <option key={method.id} value={method.id}>{method.label}</option>
               ))}
             </select>
           </label>
-          <button
+          <Button
             type="button"
-            onClick={() =>
-              setSortDirection((value) =>
-                value === "ascending" ? "descending" : "ascending",
-              )
-            }
-            className="focus-ring grid size-10 place-items-center border border-line bg-paper font-mono text-sm font-bold"
+            variant="outline"
+            size="icon"
+            onClick={() => setSortDirection((value) => (value === "ascending" ? "descending" : "ascending"))}
             aria-label={`Sort ${sortDirection === "ascending" ? "descending" : "ascending"}`}
           >
-            {sortDirection === "ascending" ? "↑" : "↓"}
-          </button>
+            {sortDirection === "ascending" ? <ArrowUp className="size-4" aria-hidden /> : <ArrowDown className="size-4" aria-hidden />}
+          </Button>
         </div>
       </div>
 
       {shown.length === 0 ? (
-        <div className="mt-8 border border-dashed border-line bg-paper/50 px-6 py-14 text-center">
-          <p className="font-bold">No matching {direction} pairs.</p>
+        <div className="surface-card px-6 py-14 text-center">
+          <p className="text-base font-semibold">No matching {direction} pairs.</p>
         </div>
       ) : (
         <>
-          <div className="mt-6 hidden overflow-hidden border border-line bg-paper shadow-soft md:block">
-            <table className="w-full table-fixed border-collapse text-sm">
-              <caption className="sr-only">
-                {direction} pairs significant in at least one displayed method
-              </caption>
+          <div className="surface-card hidden overflow-hidden md:block">
+            <table className="w-full table-fixed border-collapse text-[15px]">
+              <caption className="sr-only">{direction} pairs supported by at least one displayed method</caption>
               <colgroup>
                 <col className="w-[25%]" />
-                {methods.map((method) => (
-                  <col key={method.id} />
-                ))}
+                {methods.map((method) => <col key={method.id} />)}
               </colgroup>
               <thead className="bg-sand/70">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-bold">Pair</th>
+                  <th className="px-5 py-4 text-left text-sm font-semibold">Pair</th>
                   {methods.map((method) => {
                     const active = sortMethod === method.id;
                     return (
-                      <th
-                        key={method.id}
-                        aria-sort={active ? sortDirection : "none"}
-                        className="px-1 py-2 text-center"
-                      >
+                      <th key={method.id} aria-sort={active ? sortDirection : "none"} className="px-1 py-3 text-center">
                         <button
                           type="button"
                           onClick={() => chooseSort(method.id)}
-                          className="focus-ring inline-flex max-w-full items-center justify-center gap-1 px-1 py-1 text-[10px] font-bold leading-tight sm:text-[11px]"
+                          className="focus-ring inline-flex max-w-full items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-semibold hover:bg-paper"
                           aria-label={`Sort by ${method.label}`}
                         >
-                          <span className="min-w-0 truncate">{method.label}</span>
-                          <span className="shrink-0 font-mono text-[9px] text-muted">
-                            {method.measure}{active ? (sortDirection === "ascending" ? " ↑" : " ↓") : ""}
-                          </span>
+                          <span className="truncate">{method.label}</span>
+                          {active && (sortDirection === "ascending" ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />)}
                         </button>
                       </th>
                     );
@@ -271,25 +189,23 @@ export function CompareView(props: CompareViewProps) {
               </thead>
               <tbody>
                 {shown.map((row) => (
-                  <tr key={row.id} className="border-t border-line hover:bg-sand/35">
-                    <th className="px-4 py-2.5 text-left">
+                  <tr key={row.id} className="border-t border-line transition-colors hover:bg-sand/45">
+                    <th className="px-5 py-3.5 text-left">
                       {row.result ? (
                         <button
                           type="button"
                           onClick={() => onSelect(row.result!)}
-                          className="focus-ring max-w-full truncate font-mono text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-ink"
+                          className="focus-ring max-w-full truncate rounded-full font-mono text-[13px] font-medium hover:underline"
                           aria-label={`${row.ga} / ${row.gb}`}
                         >
                           {row.ga} / {row.gb}
                         </button>
                       ) : (
-                        <span className="block truncate font-mono text-xs font-semibold">
-                          {row.ga} / {row.gb}
-                        </span>
+                        <span className="block truncate font-mono text-[13px] font-medium">{row.ga} / {row.gb}</span>
                       )}
                     </th>
                     {methods.map((method) => (
-                      <td key={method.id} className="px-1 py-2.5 text-center">
+                      <td key={method.id} className="px-1 py-3 text-center">
                         <EvidenceMark evidence={row.evidence[method.id]} direction={direction} />
                       </td>
                     ))}
@@ -299,30 +215,18 @@ export function CompareView(props: CompareViewProps) {
             </table>
           </div>
 
-          <div className="mt-5 space-y-2 md:hidden">
+          <div className="space-y-2 md:hidden">
             {shown.map((row) => (
-              <article
-                key={row.id}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border border-line bg-paper px-4 py-3"
-              >
+              <article key={row.id} className="surface-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5">
                 <div className="min-w-0">
                   {row.result ? (
-                    <button
-                      type="button"
-                      onClick={() => onSelect(row.result!)}
-                      className="focus-ring block max-w-full truncate font-mono text-xs font-semibold underline decoration-line underline-offset-4"
-                      aria-label={`${row.ga} / ${row.gb}`}
-                    >
+                    <button type="button" onClick={() => onSelect(row.result!)} className="focus-ring block max-w-full truncate rounded-full font-mono text-[13px] font-medium hover:underline">
                       {row.ga} / {row.gb}
                     </button>
                   ) : (
-                    <p className="truncate font-mono text-xs font-semibold">
-                      {row.ga} / {row.gb}
-                    </p>
+                    <p className="truncate font-mono text-[13px] font-medium">{row.ga} / {row.gb}</p>
                   )}
-                  <p className="mt-1 text-[10px] font-bold text-muted">
-                    {activeMethod?.label} · {activeMethod?.measure}
-                  </p>
+                  <p className="mt-1 text-xs font-semibold text-muted">{activeMethod?.label}</p>
                 </div>
                 <EvidenceMark evidence={row.evidence[sortMethod]} direction={direction} />
               </article>
@@ -331,21 +235,51 @@ export function CompareView(props: CompareViewProps) {
 
           {visible < filtered.length && (
             <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={() =>
-                  setVisible((value) =>
-                    Math.min(filtered.length, value + DISPLAY_LIMIT),
-                  )
-                }
-                className="focus-ring px-4 py-2 text-xs font-bold text-muted hover:bg-ink/[0.05] hover:text-ink"
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={() => setVisible((value) => Math.min(filtered.length, value + DISPLAY_LIMIT))}>
                 Show {Math.min(DISPLAY_LIMIT, filtered.length - visible)} more
-              </button>
+              </Button>
             </div>
           )}
         </>
       )}
     </section>
+  );
+}
+
+export type CompareViewProps = {
+  data: CohortData;
+  manifestMethods: unknown;
+  qThreshold: number;
+  onSelect: (result: InteractionResult) => void;
+};
+
+export function CompareView({ data, manifestMethods, qThreshold, onSelect }: CompareViewProps) {
+  const [query, setQuery] = useState("");
+  useEffect(() => setQuery(""), [data.id]);
+
+  return (
+    <TooltipProvider delayDuration={120}>
+      <section aria-labelledby="compare-title">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <h2 id="compare-title" className="text-[clamp(2rem,4vw,3.2rem)] font-semibold leading-none tracking-[-0.035em]">
+            Compare methods
+          </h2>
+          <SearchField value={query} onChange={setQuery} placeholder="Find a gene" label="Search compared gene pairs" className="w-full sm:w-64" />
+        </div>
+        <div className="space-y-12">
+          {(["ME", "CO"] as const).map((direction) => (
+            <ComparisonSection
+              key={direction}
+              data={data}
+              manifestMethods={manifestMethods}
+              direction={direction}
+              qThreshold={qThreshold}
+              query={query}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      </section>
+    </TooltipProvider>
   );
 }

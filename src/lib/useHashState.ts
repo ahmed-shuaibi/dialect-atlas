@@ -3,29 +3,30 @@ import type {
   AtlasMode,
   AtlasUrlState,
   AtlasView,
-  Direction,
-  ExploreDirection,
   ExploreDisplay,
+  QThreshold,
 } from "@/features/atlas/types";
+import { DEFAULT_Q_THRESHOLD, Q_THRESHOLDS } from "@/features/atlas/types";
 
 export const URL_DEFAULTS: AtlasUrlState = {
   view: "explore",
   mode: "consensus",
   settings: false,
-  exploreDisplay: "network",
-  exploreDirection: "all",
-  compareDirection: "ME",
+  exploreDisplay: "list",
+  qThreshold: DEFAULT_Q_THRESHOLD,
+  significantOnly: false,
 };
 
 const isView = (value: string | null): value is AtlasView =>
   value === "explore" || value === "compare" || value === "about";
 const isMode = (value: string | null): value is AtlasMode =>
   value === "consensus" || value === "cbase" || value === "dig" || value === "mutsig";
-const isDirection = (value: string | null): value is Direction => value === "ME" || value === "CO";
-const isExploreDirection = (value: string | null): value is ExploreDirection =>
-  value === "all" || isDirection(value);
 const isExploreDisplay = (value: string | null): value is ExploreDisplay =>
   value === "network" || value === "list";
+const parseQThreshold = (value: string | null): QThreshold => {
+  const parsed = Number(value);
+  return Q_THRESHOLDS.find((threshold) => threshold === parsed) ?? DEFAULT_Q_THRESHOLD;
+};
 
 export function parseAtlasHash(hash: string): AtlasUrlState {
   const params = new URLSearchParams(hash.replace(/^#/, ""));
@@ -34,8 +35,6 @@ export function parseAtlasHash(hash: string): AtlasUrlState {
   const view = params.get("view");
   const mode = params.get("mode");
   const exploreDisplay = params.get("display");
-  const exploreDirection = params.get("direction");
-  const compareDirection = params.get("compare");
   return {
     view: isView(view) ? view : URL_DEFAULTS.view,
     cohort,
@@ -45,12 +44,8 @@ export function parseAtlasHash(hash: string): AtlasUrlState {
     exploreDisplay: isExploreDisplay(exploreDisplay)
       ? exploreDisplay
       : URL_DEFAULTS.exploreDisplay,
-    exploreDirection: isExploreDirection(exploreDirection)
-      ? exploreDirection
-      : URL_DEFAULTS.exploreDirection,
-    compareDirection: isDirection(compareDirection)
-      ? compareDirection
-      : URL_DEFAULTS.compareDirection,
+    qThreshold: parseQThreshold(params.get("q")),
+    significantOnly: params.get("significant") === "1",
   };
 }
 
@@ -62,8 +57,8 @@ export function serializeAtlasHash(state: AtlasUrlState): string {
   if (state.pair) params.set("pair", state.pair);
   if (state.settings) params.set("settings", "1");
   params.set("display", state.exploreDisplay);
-  params.set("direction", state.exploreDirection);
-  params.set("compare", state.compareDirection);
+  if (state.qThreshold !== DEFAULT_Q_THRESHOLD) params.set("q", String(state.qThreshold));
+  if (state.significantOnly) params.set("significant", "1");
   return `#${params.toString()}`;
 }
 

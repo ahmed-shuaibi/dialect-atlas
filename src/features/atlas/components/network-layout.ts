@@ -4,11 +4,13 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  forceX,
+  forceY,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from "d3-force";
 import { baseGene, codePointCompare, resultQ } from "@/features/atlas/lib/atlas-transform";
-import type { AtlasMode, Direction, InteractionResult } from "@/features/atlas/types";
+import { DEFAULT_Q_THRESHOLD, type AtlasMode, type Direction, type InteractionResult } from "@/features/atlas/types";
 
 export interface NetworkLayoutNode {
   id: string;
@@ -16,7 +18,7 @@ export interface NetworkLayoutNode {
   effect: "M" | "N" | null;
   x: number;
   y: number;
-  degree: number;
+  shownDegree: number;
 }
 
 export interface NetworkLayoutEdge {
@@ -65,15 +67,16 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-export function edgeWidthForQ(q: number): number {
-  const score = -Math.log10(Math.max(q, 1e-12));
-  return Math.min(5, Math.max(1.5, 1.5 + (score - 2) * 0.85));
+export function edgeWidthForQ(q: number, qThreshold = DEFAULT_Q_THRESHOLD): number {
+  const strength = Math.max(0, Math.log10(qThreshold / Math.max(q, 1e-12)));
+  return Math.min(5, 1.5 + strength * 0.85);
 }
 
-/** Build a deterministic, static force layout for the complete significant result set. */
+/** Build a deterministic initial force layout for the provided display result set. */
 export function buildNetworkLayout(
   results: InteractionResult[],
   mode: AtlasMode,
+  qThreshold = DEFAULT_Q_THRESHOLD,
 ): NetworkLayout {
   const orderedResults = [...results].sort((a, b) => codePointCompare(a.id, b.id));
   const degrees = new Map<string, number>();
@@ -84,7 +87,7 @@ export function buildNetworkLayout(
   const ids = [...degrees.keys()].sort(codePointCompare);
   if (ids.length === 0) return { nodes: [], edges: [] };
 
-  const radius = Math.max(170, ids.length * 7);
+  const radius = Math.max(150, ids.length * 6);
   const forceNodes: ForceNode[] = ids.map((id, index) => {
     const angle = (index / ids.length) * Math.PI * 2;
     return { id, x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
@@ -101,11 +104,13 @@ export function buildNetworkLayout(
       "link",
       forceLink<ForceNode, ForceLink>(forceLinks)
         .id((node) => node.id)
-        .distance(108)
-        .strength(0.72),
+        .distance(106)
+        .strength(0.78),
     )
-    .force("charge", forceManyBody().strength(-230).distanceMax(560))
-    .force("collision", forceCollide<ForceNode>().radius(56).strength(0.9).iterations(2))
+    .force("charge", forceManyBody().strength(-125).distanceMax(340))
+    .force("collision", forceCollide<ForceNode>().radius(59).strength(0.95).iterations(3))
+    .force("x", forceX(0).strength(0.09))
+    .force("y", forceY(0).strength(0.12))
     .force("center", forceCenter(0, 0))
     .stop();
 
@@ -117,8 +122,8 @@ export function buildNetworkLayout(
     forceNodes.map((node) => [
       node.id,
       {
-        x: Math.round((node.x ?? 0) * 1000) / 1000,
-        y: Math.round((node.y ?? 0) * 1000) / 1000,
+        x: Math.round((node.x ?? 0) * 1600) / 1000,
+        y: Math.round((node.y ?? 0) * 700) / 1000,
       },
     ]),
   );
@@ -129,7 +134,7 @@ export function buildNetworkLayout(
       effect: effect(id),
       x: positions.get(id)?.x ?? 0,
       y: positions.get(id)?.y ?? 0,
-      degree: degrees.get(id) ?? 0,
+      shownDegree: degrees.get(id) ?? 0,
     })),
     edges: orderedResults.map((result) => {
       const q = resultQ(result, mode);
@@ -139,7 +144,7 @@ export function buildNetworkLayout(
         target: result.gb,
         direction: result.direction,
         q,
-        width: edgeWidthForQ(q),
+        width: edgeWidthForQ(q, qThreshold),
       };
     }),
   };

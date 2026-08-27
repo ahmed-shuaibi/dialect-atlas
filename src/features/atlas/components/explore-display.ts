@@ -22,9 +22,10 @@ export function resultEffect(result: InteractionResult, mode: AtlasMode): number
 
 export function resultEffectText(result: InteractionResult, mode: AtlasMode): string {
   const value = resultEffect(result, mode);
+  const prefix = mode === "consensus" ? "median " : "";
   return result.direction === "ME"
-    ? `ρ ${value < 0 ? "−" : ""}${fmtStat(Math.abs(value))}`
-    : `LRT ${fmtStat(value, 2)}`;
+    ? `${prefix}ρ ${value < 0 ? "−" : ""}${fmtStat(Math.abs(value))}`
+    : `${prefix}LRT ${fmtStat(value, 2)}`;
 }
 
 /**

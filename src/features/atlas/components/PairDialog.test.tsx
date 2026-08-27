@@ -52,13 +52,14 @@ function cohort(
   };
 }
 
-function dialogFor(data: CohortData) {
-  const [result] = modelResults(data, "cbase", "ME");
+function dialogFor(data: CohortData, qThreshold = 0.01) {
+  const [result] = modelResults(data, "cbase", "ME", { significantOnly: false });
   return render(
     <PairDialog
       result={result}
       data={data}
       mode="cbase"
+      qThreshold={qThreshold}
       open
       onOpenChange={() => undefined}
     />,
@@ -92,19 +93,22 @@ describe("PairDialog model evidence", () => {
     dialogFor(data);
 
     expect(screen.getByText("Significant with CBaSE")).toBeInTheDocument();
-    expect(screen.getByText(/1\/3 backgrounds agree on ME; 1\/3 meet/)).toBeInTheDocument();
+    expect(screen.getByText(/1\/3 distinct backgrounds agree on ME; 1\/3 meet/)).toBeInTheDocument();
     const dig = screen.getAllByText("DIG")[0].closest("article");
     const mutsig = screen.getAllByText("MutSigCV2")[0].closest("article");
     expect(dig).not.toBeNull();
     expect(mutsig).not.toBeNull();
     expect(within(dig!).getByText("CO")).toBeInTheDocument();
-    expect(within(dig!).getByText("0.330")).toBeInTheDocument();
+    expect(within(dig!).getByText("LRT")).toBeInTheDocument();
+    expect(within(dig!).getByText("8.00")).toBeInTheDocument();
+    expect(within(dig!).queryByText("0.330")).not.toBeInTheDocument();
     expect(within(dig!).getByText("Significant CO; opposite direction")).toBeInTheDocument();
     expect(within(dig!).getByText("0.0010")).toBeInTheDocument();
     expect(within(dig!).getByText("7")).toBeInTheDocument();
     expect(within(dig!).getByText("91/100")).toBeInTheDocument();
     expect(within(mutsig!).getByText("Neutral")).toBeInTheDocument();
-    expect(within(mutsig!).getByText("0.000")).toBeInTheDocument();
+    expect(within(mutsig!).getByText("Effect")).toBeInTheDocument();
+    expect(within(mutsig!).getByText("not assigned")).toBeInTheDocument();
     expect(within(mutsig!).getByText("not reported")).toBeInTheDocument();
     expect(within(mutsig!).getByText("11")).toBeInTheDocument();
     expect(within(mutsig!).getByText("88/100")).toBeInTheDocument();
@@ -146,6 +150,7 @@ describe("PairDialog model evidence", () => {
         result={result}
         data={data}
         mode="dig"
+        qThreshold={0.01}
         open
         onOpenChange={() => undefined}
       />,
@@ -164,15 +169,49 @@ describe("PairDialog model evidence", () => {
         result={result}
         data={data}
         mode="consensus"
+        qThreshold={0.01}
         open
         onOpenChange={() => undefined}
       />,
     );
 
     expect(screen.getByText("Significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/3\/3 backgrounds agree on ME; 3\/3 meet/)).toBeInTheDocument();
+    expect(screen.getByText(/3\/3 distinct backgrounds agree on ME; 3\/3 meet/)).toBeInTheDocument();
     expect(screen.getByText("Technical details")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it("classifies the same evidence using the active strict q threshold", () => {
+    const shared = row("A_M", "B_N", "ME", 1, { q: 0.02 });
+    const data = cohort({ cbase: [shared], dig: [shared], mutsig: [shared] });
+    const [result] = modelResults(data, "cbase", "ME", { significantOnly: false });
+    const view = render(
+      <PairDialog
+        result={result}
+        data={data}
+        mode="consensus"
+        qThreshold={0.01}
+        open
+        onOpenChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Not significant under all 3 backgrounds")).toBeInTheDocument();
+    expect(screen.getByText("3/3 distinct backgrounds agree on ME; 0/3 meet q < 0.01.")).toBeInTheDocument();
+
+    view.rerender(
+      <PairDialog
+        result={result}
+        data={data}
+        mode="consensus"
+        qThreshold={0.05}
+        open
+        onOpenChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Significant under all 3 backgrounds")).toBeInTheDocument();
+    expect(screen.getByText("3/3 distinct backgrounds agree on ME; 3/3 meet q < 0.05.")).toBeInTheDocument();
   });
 
   it("explains why a significant MutSig fallback row is not all-three support", () => {
@@ -188,13 +227,14 @@ describe("PairDialog model evidence", () => {
         result={result}
         data={data}
         mode="consensus"
+        qThreshold={0.01}
         open
         onOpenChange={() => undefined}
       />,
     );
 
     expect(screen.getByText("Not supported by 3 distinct backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/3\/3 backgrounds agree on ME; 3\/3 meet/)).toBeInTheDocument();
+    expect(screen.getByText(/2\/2 distinct backgrounds agree on ME; 2\/2 meet/)).toBeInTheDocument();
     expect(
       screen.getByText(/reuses the CBaSE background for A_M.*does not count as distinct/),
     ).toBeInTheDocument();

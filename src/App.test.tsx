@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/App";
+import { ThemeProvider } from "@/components/ui/theme";
 import { clearAtlasCache } from "@/features/atlas/lib/atlas-data";
 
 const fields = [
@@ -188,29 +189,35 @@ function resultIds(container: HTMLElement): string[] {
     .sort();
 }
 
-function expectFact(label: string, value: string) {
-  const fact = screen.getByText(label).parentElement;
-  expect(fact).not.toBeNull();
-  expect(fact).toHaveTextContent(value);
+function renderApp() {
+  return render(
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>,
+  );
 }
 
 describe("Atlas v2 critical flow", () => {
   beforeEach(() => {
     clearAtlasCache();
+    window.localStorage.clear();
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&mode=consensus&display=network&direction=all&compare=ME",
+      "/#view=explore&mode=consensus&display=list",
     );
     installFetch();
   });
 
-  it("chooses cancer then cohort, shows significant counts, and opens addressable evidence", async () => {
+  it("chooses cancer then cohort, defaults to both ranked lanes, and opens addressable evidence", async () => {
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    const { container } = renderApp();
 
     expect(await screen.findByRole("heading", { name: "Choose a cancer." })).toBeInTheDocument();
     const navigation = screen.getByRole("navigation", { name: "Primary" });
+    const brand = screen.getByRole("link", { name: "DIALECT Atlas" });
+    expect(brand.querySelector('img[src*="dialect-icon.png"]')).toHaveClass("sm:hidden");
+    expect(brand.querySelector('img[src*="dialect-wordmark.png"]')).toHaveClass("hidden", "sm:block");
     expect(
       within(navigation)
         .getAllByRole("link")
@@ -222,13 +229,16 @@ describe("Atlas v2 critical flow", () => {
     expect(await screen.findByText("Choose a study cohort.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Lung adenocarcinoma/ }));
 
-    expect(await screen.findByRole("heading", { name: "Significant interactions" })).toBeInTheDocument();
-    expectFact("Significant ME", "1");
-    expectFact("Significant CO", "1");
+    expect(await screen.findByRole("heading", { name: "Lung adenocarcinoma" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Significant only" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("561").parentElement).toHaveTextContent("561 tumors");
+    expect(screen.getByRole("button", { name: "Change cancer or cohort" })).toBeInTheDocument();
+    expect(screen.queryByText(/All 3 backgrounds.*q/)).not.toBeInTheDocument();
     expect(window.location.hash).toContain("cohort=TCGA__LUAD");
 
-    await user.click(screen.getByRole("button", { name: "Show list" }));
-    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
     const audit = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
     expect(audit.violations).toEqual([]);
 
@@ -239,75 +249,103 @@ describe("Atlas v2 critical flow", () => {
     await user.click(pair!);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/3\/3 backgrounds agree on ME; 3\/3 meet/)).toBeInTheDocument();
+    expect(screen.getByText(/3\/3 distinct backgrounds agree on ME; 3\/3 meet q < 0\.01/)).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=ME%3A%3AKRAS_M%3A%3ATP53_M");
   });
 
-  it("keeps a small significant result set identical in the network and list", async () => {
+  it("keeps both interaction directions identical in the list and network", async () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=network&direction=all&compare=ME",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    const { container } = renderApp();
 
-    const network = await screen.findByRole("region", {
-      name: "Significant interaction network",
-    });
-    expect(
-      network,
-    ).toBeInTheDocument();
-    expect(network).toHaveTextContent("2 significant pairs");
-
-    await user.click(screen.getByRole("button", { name: "Show list" }));
     expect(await screen.findByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
     expect(resultIds(container)).toEqual([
       "CO::EGFR_M::PIK3CA_M",
       "ME::KRAS_M::TP53_M",
     ]);
-    expect(window.location.hash).toContain("display=list");
+
+    await user.click(screen.getByRole("button", { name: "Network" }));
+    const network = await screen.findByRole("region", {
+      name: "Interaction network",
+    });
+    expect(network).toHaveTextContent("1 ME + 1 CO");
+    expect(window.location.hash).toContain("display=network");
   });
 
-  it("changes the significance model in settings and recomputes the facts and result set", async () => {
+  it("changes the background model in Customize and recomputes the ranked result set", async () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list&direction=all&compare=ME",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
-    expect(await screen.findByRole("heading", { name: "Significant interactions" })).toBeInTheDocument();
-    expectFact("Significant ME", "1");
-    await user.click(screen.getByRole("button", { name: "Open Atlas settings" }));
-    await user.click(screen.getByRole("radio", { name: /^Significant with CBaSE\b/ }));
+    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
+    expect(screen.queryByText("BRAF_M")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
+    await user.click(screen.getByRole("radio", { name: /^CBaSE\b/ }));
     await user.click(screen.getByRole("button", { name: "Close" }));
 
     await waitFor(() => expect(window.location.hash).toContain("mode=cbase"));
-    expectFact("Significant ME", "2");
-    expectFact("Significant CO", "1");
     expect(await screen.findByText("BRAF_M")).toBeInTheDocument();
   });
 
-  it("ignores legacy strict state and removes a non-significant consensus pair deep link", async () => {
+  it("shares q and significance filters and can recover the ranked list", async () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&strict=0&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list&direction=all&compare=ME",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Significant only" }));
+    await waitFor(() => expect(window.location.hash).toContain("significant=1"));
+
+    await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
+    await user.click(screen.getByRole("button", { name: "0.001" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByText("No pairs meet q < 0.001.")).toBeInTheDocument();
+    expect(window.location.hash).toContain("q=0.001");
+    await user.click(screen.getByRole("button", { name: "Show ranked pairs" }));
+    await waitFor(() => expect(window.location.hash).not.toContain("significant="));
+    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
+  });
+
+  it("keeps ranked deep links but invalidates unsupported pairs in significant-only view", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list",
     );
     const unsupported = structuredClone(cohort);
     unsupported.models.dig.rows[0][17] = 0.02;
     installFetch(unsupported);
 
-    render(<App />);
-    expect(await screen.findByRole("heading", { name: "Significant interactions" })).toBeInTheDocument();
+    const ranked = renderApp();
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Not significant under all 3 backgrounds")).toBeInTheDocument();
+    expect(window.location.hash).toContain("pair=");
+
+    ranked.unmount();
+    clearAtlasCache();
+    window.history.replaceState(
+      null,
+      "",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list&significant=1",
+    );
+    renderApp();
+    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
     await waitFor(() => {
       expect(window.location.hash).not.toContain("pair=");
-      expect(window.location.hash).not.toContain("strict=");
     });
-    expectFact("Significant ME", "0");
-    expectFact("Significant CO", "1");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -315,34 +353,37 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=compare&cohort=TCGA__LUAD&mode=consensus&display=network&direction=all&compare=ME",
+      "/#view=compare&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     expect(await screen.findByRole("heading", { name: "Compare methods" })).toBeInTheDocument();
-    const table = screen.getByRole("table");
-    await user.click(screen.getByRole("button", { name: "Sort by Fisher" }));
-    const fisherHeader = screen.getByRole("columnheader", { name: /Fisher q/ });
+    const meSection = screen.getByRole("heading", { name: "Mutually exclusive" }).closest("section");
+    expect(meSection).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
+    const table = within(meSection!).getByRole("table");
+    await user.click(within(meSection!).getByRole("button", { name: "Sort by Fisher" }));
+    const fisherHeader = within(meSection!).getByRole("columnheader", { name: /Fisher/ });
     expect(fisherHeader).toHaveAttribute("aria-sort", "ascending");
     expect(within(table).getAllByRole("row")[1]).toHaveTextContent("ALK_M / ROS1_M");
-    expect(screen.queryByRole("button", { name: "ALK_M / ROS1_M" })).not.toBeInTheDocument();
+    expect(within(meSection!).queryByRole("button", { name: "ALK_M / ROS1_M" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Sort by Fisher" }));
+    await user.click(within(meSection!).getByRole("button", { name: "Sort by Fisher" }));
     expect(fisherHeader).toHaveAttribute("aria-sort", "descending");
-    await user.click(screen.getAllByRole("button", { name: "BRAF_M / NRAS_M" })[0]);
+    await user.click(within(meSection!).getAllByRole("button", { name: "BRAF_M / NRAS_M" })[0]);
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Not significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/1\/3 backgrounds agree on ME; 1\/3 meet/)).toBeInTheDocument();
+    expect(screen.getByText(/1\/3 distinct backgrounds agree on ME; 1\/3 meet q < 0\.01/)).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=ME%3A%3ABRAF_M%3A%3ANRAS_M");
   });
 
-  it("shows an honest zero state and offers model recovery", async () => {
+  it("shows an honest significant-only zero state and recovers ranked pairs", async () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list&direction=all&compare=ME",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list&significant=1",
     );
     const empty = structuredClone(cohort);
     for (const model of Object.values(empty.models)) {
@@ -350,13 +391,12 @@ describe("Atlas v2 critical flow", () => {
     }
     installFetch(empty);
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
-    expect(await screen.findByText("No significant pairs in this view.")).toBeInTheDocument();
-    expectFact("Significant ME", "0");
-    expectFact("Significant CO", "0");
-    await user.click(screen.getByRole("button", { name: "Choose another model" }));
-    expect(await screen.findByRole("heading", { name: "Result definition" })).toBeInTheDocument();
-    expect(window.location.hash).toContain("settings=1");
+    expect(await screen.findByText("No pairs meet q < 0.01.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show ranked pairs" }));
+    await waitFor(() => expect(window.location.hash).not.toContain("significant="));
+    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
   });
 });

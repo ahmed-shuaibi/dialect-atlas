@@ -8,6 +8,7 @@ import {
   lrtEvidence,
   modelAgreement,
   modelResults,
+  resultIsSignificant,
   resultQ,
 } from "@/features/atlas/lib/atlas-transform";
 import type { Bmr, CohortData, DialectRow, TransportDirection } from "@/features/atlas/types";
@@ -87,7 +88,6 @@ describe("Atlas interaction ranking", () => {
 
     const consensus = consensusResults(cohort, "ME");
     expect(consensus.map((result) => result.ga)).toEqual(["C_M"]);
-    expect(consensus[0].fdrSupport).toBe(3);
   });
 
   it("follows stored direction-specific ranks and ignores neutral rows", () => {
@@ -139,7 +139,6 @@ describe("Atlas interaction ranking", () => {
 
     const [result] = modelResults(cohort, "cbase", "ME");
     expect(result.matches.map(({ bmr }) => bmr)).toEqual(["cbase"]);
-    expect(result.fdrSupport).toBe(1);
     expect(result.pairEvidence.map(({ bmr, row }) => [bmr, row.direction])).toEqual([
       ["cbase", "ME"],
       ["dig", "CO"],
@@ -269,11 +268,13 @@ describe("Atlas interaction ranking", () => {
     expect(findResultForMode(cohort, pair, "consensus")).toBeNull();
   });
 
-  it("uses the strict q < 0.01 boundary and excludes missing q values", () => {
+  it("uses a strict dynamic q boundary and excludes missing q values", () => {
     const cohort = data({
       cbase: [
         dialectRow("PASS_M", "A_N", "ME", 1, { q: 0.009999 }),
         dialectRow("BOUNDARY_M", "B_N", "ME", 2, { q: 0.01 }),
+        dialectRow("RELAXED_M", "D_N", "ME", 3, { q: 0.049999 }),
+        dialectRow("RELAXED_BOUNDARY_M", "E_N", "ME", 4, { q: 0.05 }),
         dialectRow("MISSING_M", "C_N", "ME", 3, { q: null }),
       ],
       dig: [],
@@ -283,7 +284,47 @@ describe("Atlas interaction ranking", () => {
     expect(isSignificant({ q: 0.009999 })).toBe(true);
     expect(isSignificant({ q: 0.01 })).toBe(false);
     expect(isSignificant({ q: null })).toBe(false);
+    expect(isSignificant({ q: 0.049999 }, 0.05)).toBe(true);
+    expect(isSignificant({ q: 0.05 }, 0.05)).toBe(false);
+    expect(isSignificant({ q: null }, 0.05)).toBe(false);
     expect(modelResults(cohort, "cbase", "ME").map(({ ga }) => ga)).toEqual(["PASS_M"]);
+    expect(
+      modelResults(cohort, "cbase", "ME", { qThreshold: 0.05 }).map(({ ga }) => ga),
+    ).toEqual(["PASS_M", "BOUNDARY_M", "RELAXED_M"]);
+  });
+
+  it("separates ranked candidates from threshold-filtered significant results", () => {
+    const cbase = [
+      dialectRow("STRICT_M", "A_N", "ME", 1, { q: 0.004 }),
+      dialectRow("RELAXED_M", "B_N", "ME", 2, { q: 0.02 }),
+      dialectRow("BOUNDARY_M", "C_N", "ME", 3, { q: 0.05 }),
+    ];
+    const cohort = data({ cbase, dig: [...cbase], mutsig: [...cbase] });
+
+    expect(consensusResults(cohort, "ME").map(({ ga }) => ga)).toEqual(["STRICT_M"]);
+    expect(
+      consensusResults(cohort, "ME", { qThreshold: 0.05 }).map(({ ga }) => ga),
+    ).toEqual(["STRICT_M", "RELAXED_M"]);
+
+    const candidates = consensusResults(cohort, "ME", {
+      qThreshold: 0.01,
+      significantOnly: false,
+    });
+    expect(candidates.map(({ ga }) => ga)).toEqual([
+      "STRICT_M",
+      "RELAXED_M",
+      "BOUNDARY_M",
+    ]);
+    expect(candidates.map((result) => resultIsSignificant(result, "consensus", 0.01))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(candidates.map((result) => resultIsSignificant(result, "consensus", 0.05))).toEqual([
+      true,
+      true,
+      false,
+    ]);
   });
 
   it("requires same-direction significance under every model for consensus", () => {
@@ -308,7 +349,11 @@ describe("Atlas interaction ranking", () => {
     expect(result.representative.rank).toBe(2);
     expect(resultQ(result, "dig")).toBe(0.008);
     expect(modelAgreement(result)).toBe(2);
+    expect(modelAgreement(result, 0.05)).toBe(3);
+    expect(resultIsSignificant(result, "dig", 0.005)).toBe(false);
+    expect(resultIsSignificant(result, "dig", 0.01)).toBe(true);
     expect(modelResults(cohort, "mutsig", "ME")).toEqual([]);
+    expect(modelResults(cohort, "mutsig", "ME", { qThreshold: 0.05 })).toHaveLength(1);
   });
 
   it("gives network and list consumers one complete result set", () => {
@@ -320,7 +365,7 @@ describe("Atlas interaction ranking", () => {
       dig: [],
       mutsig: [],
     });
-    const results = exploreResults(cohort, "cbase", "all");
+    const results = exploreResults(cohort, "cbase");
     expect(results.map(({ id }) => id)).toEqual([
       "ME::A_M::B_N",
       "CO::KRAS_M::TP53_M",

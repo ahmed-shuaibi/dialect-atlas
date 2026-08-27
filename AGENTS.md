@@ -47,25 +47,32 @@ complete compact JSON table per cohort. Types: `src/features/atlas/types.ts`.
 
 ## Design locks (non-negotiable)
 
-- **Warm light only:** paper/beige surfaces, near-black text, crisp Inter type, and
-  deliberate whitespace. IBM Plex Mono is reserved for genes and statistics.
+- **Warm, legible, and rounded:** beige light mode is the default, a warm charcoal
+  dark mode is available from the header, Raleway is the UI face, and large type plus
+  generous radii are the baseline. IBM Plex Mono is reserved for genes and statistics.
 - **Color is semantic and restrained:** ME blue, CO ochre, and one support green.
 - **Cancer first:** never choose a default cohort. Selection is two-stage: cancer type,
   then the available study/cohort for that cancer.
-- **Result first:** Explore defaults to a legible interaction network and offers a
-  compact list from the same significant result set. Bound dense networks to a clearly
-  labeled, direction-balanced top-ranked view; the progressive list exposes every pair.
-- **Significance first:** no interaction appears merely because it ranked highly.
-  Every visible result has `q < 0.01` under the active model.
-- **All three BMRs by default:** the default is the exact pair and direction at
-  `q < 0.01` under CBaSE, DIG, and a real MutSigCV2 background. Exclude MutSig rows
-  derived from CBaSE fallback features. Individual-model views use that model's
-  significant results. Empty sets stay empty; never substitute weaker evidence.
+- **Result first:** Explore defaults to a two-lane ranked list with ME and CO always
+  visible. The optional network uses the same candidate set, is direction balanced and
+  bounded, and supports drag, hover/focus inspection, selection, and pair detail.
+- **Candidates and calls stay distinct:** the default list exposes ranked candidates;
+  `Significant only` applies the active strict q-value cutoff. Significant rows use a
+  quiet tint and check, never a repeated text badge. Empty significant sets stay honest
+  and offer a one-step return to the ranked list.
+- **All three BMRs by default:** the default candidate set requires the exact pair and
+  direction under CBaSE, DIG, and a real MutSigCV2 background. Exclude MutSig rows
+  derived from CBaSE fallback features. A consensus significance call requires every
+  background to pass the active cutoff; individual views use that model's q-value.
+- **One threshold everywhere:** q presets are controlled in Customize, shared by
+  Explore, Compare, network, and pair detail, and serialized in the hash URL. Calls use
+  strict `<`; MEGSA remains fixed at `p < 0.001` because that release field is a p-value.
 - **Scientific ranks stay direction-specific:** ME by rho ascending; CO by LRT
   descending. Preserve raw negative numerical LRT values, but show them as zero
   evidence. Do not apply an epsilon filter.
-- **Progressive disclosure:** pair detail and BMR selection belong in dialogs/drawers;
-  methodology and provenance belong in Compare/About, not permanent prose.
+- **Progressive disclosure:** pair detail, BMR selection, and q cutoff belong in
+  dialogs/drawers; methodology and provenance belong in Compare/About, not permanent
+  prose. Cancer/cohort switching is the rounded Change action beside the cancer name.
 - **Navigation order:** About, Explore, Compare. Pair rows with DIALECT evidence may
   open detail from Compare even when absent from the active Explore result set.
 - **Minimal text and motion.** Use short sentence-case copy, real buttons, visible focus,

@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronsUpDown, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, Replace } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SearchField } from "@/components/ui/search-field";
 import {
   CANCER_FAMILIES,
   type CancerFamilyId,
@@ -35,13 +36,13 @@ function CohortOption({
     <button
       type="button"
       onClick={() => onSelect(cohort.id)}
-      className="focus-ring group flex w-full items-center gap-4 rounded-[12px] border border-transparent px-4 py-3 text-left transition-colors hover:border-line hover:bg-paper"
+      className="focus-ring group flex w-full items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-left transition-colors hover:border-line hover:bg-sand/60"
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-semibold tracking-[-0.015em] text-ink">
+        <p className="truncate text-base font-semibold text-ink">
           {cohort.cancer}
         </p>
-        <p className="mt-1 truncate text-xs text-muted">
+        <p className="mt-1 truncate text-sm text-muted">
           {STUDY_LABEL[cohort.study] ?? cohort.study} · {fmtInt(cohort.n_samples)} samples
           {showFamily && family ? ` · ${family.label}` : ""}
         </p>
@@ -57,11 +58,9 @@ function CohortOption({
 function CohortPicker({
   cohorts,
   onSelect,
-  autoFocus = false,
 }: {
   cohorts: CohortMeta[];
   onSelect: (id: string) => void;
-  autoFocus?: boolean;
 }) {
   const [familyId, setFamilyId] = useState<CancerFamilyId | null>(null);
   const [query, setQuery] = useState("");
@@ -92,29 +91,19 @@ function CohortPicker({
 
   return (
     <div className="bg-paper">
-      <div className="border-b border-line p-3 sm:p-4">
-        <label className="focus-within:ring-brand flex items-center gap-3 rounded-[12px] border border-line bg-white/65 px-4 focus-within:ring-[3px]">
-          <Search className="size-4 shrink-0 text-muted" aria-hidden />
-          <span className="sr-only">Search cancers and cohorts</span>
-          <input
-            autoFocus={autoFocus}
-            role="combobox"
-            aria-label="Cancer and cohort search"
-            aria-controls={resultsId}
-            aria-expanded={Boolean(queryValue)}
-            aria-autocomplete="list"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search any cancer or cohort"
-            className="h-12 w-full bg-transparent text-[15px] font-medium outline-none placeholder:text-muted"
-          />
-        </label>
+      <div className="border-b border-line p-4 sm:p-5">
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search cancers or cohorts"
+          label="Cancer and cohort search"
+        />
       </div>
 
       <div id={resultsId} className="max-h-[min(58vh,32rem)] overflow-y-auto p-3 sm:p-4">
         {queryValue ? (
           <div>
-            <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+            <p className="px-2 pb-2 text-xs font-semibold text-muted">
               {searchResults.length} {searchResults.length === 1 ? "match" : "matches"}
             </p>
             {searchResults.length > 0 ? (
@@ -124,7 +113,7 @@ function CohortPicker({
                 ))}
               </div>
             ) : (
-              <p className="px-3 py-12 text-center text-sm text-muted">No matching cancer or cohort.</p>
+              <p className="px-3 py-12 text-center text-base text-muted">No matching cancer or cohort.</p>
             )}
           </div>
         ) : activeFamily ? (
@@ -132,14 +121,14 @@ function CohortPicker({
             <button
               type="button"
               onClick={() => setFamilyId(null)}
-              className="focus-ring mb-3 inline-flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-xs font-semibold text-muted hover:bg-sand hover:text-ink"
+              className="focus-ring mb-3 inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-muted hover:bg-sand hover:text-ink"
             >
               <ArrowLeft className="size-3.5" aria-hidden />
               All cancer types
             </button>
             <div className="mb-2 px-2">
-              <p className="text-lg font-semibold tracking-[-0.02em]">{activeFamily.label}</p>
-              <p className="mt-1 text-xs text-muted">Choose a study cohort.</p>
+              <p className="text-xl font-semibold">{activeFamily.label}</p>
+              <p className="mt-1 text-sm text-muted">Choose a study cohort.</p>
             </div>
             <div className="grid gap-0.5 sm:grid-cols-2">
               {familyCohorts.map((cohort) => (
@@ -150,8 +139,8 @@ function CohortPicker({
         ) : (
           <div>
             <div className="mb-3 flex items-baseline justify-between gap-3 px-2">
-              <p className="text-sm font-semibold">Choose a cancer type</p>
-              <p className="text-[11px] text-muted">Then choose a study cohort</p>
+              <p className="text-base font-semibold">Choose a cancer group</p>
+              <p className="text-sm text-muted">Then choose a cohort</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {families.map((family) => (
@@ -159,16 +148,13 @@ function CohortPicker({
                   key={family.id}
                   type="button"
                   onClick={() => setFamilyId(family.id)}
-                  className="focus-ring group min-h-24 rounded-[12px] border border-line bg-white/35 p-4 text-left transition-colors hover:border-ink/25 hover:bg-white/75"
+                  className="focus-ring group min-h-20 rounded-2xl border border-line bg-canvas/40 p-4 text-left transition-colors hover:border-ink/25 hover:bg-sand"
                 >
                   <span className="flex items-start justify-between gap-3">
-                    <span className="text-sm font-semibold tracking-[-0.015em] text-ink">
+                    <span className="text-base font-semibold text-ink">
                       {family.label}
                     </span>
-                    <span className="font-mono text-[10px] text-muted">{family.count}</span>
-                  </span>
-                  <span className="mt-2 block text-[11px] leading-4 text-muted">
-                    {family.description}
+                    <span className="font-mono text-xs text-muted">{family.count}</span>
                   </span>
                 </button>
               ))}
@@ -193,12 +179,12 @@ export function InitialCohortChooser({
         <h1 className="mx-auto max-w-[16ch] text-[clamp(2.7rem,7vw,5rem)] font-[760] leading-[0.96] tracking-[-0.055em]">
           Choose a cancer.
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-balance text-[17px] leading-7 text-muted">
-          Find significant gene interactions by cancer type and study cohort.
+        <p className="mx-auto mt-5 max-w-xl text-balance text-lg leading-8 text-muted">
+          Explore ranked gene interactions by cancer type and cohort.
         </p>
       </div>
       <div className="surface-card mx-auto w-full max-w-5xl overflow-hidden text-left">
-        <CohortPicker cohorts={cohorts} onSelect={onSelect} autoFocus />
+        <CohortPicker cohorts={cohorts} onSelect={onSelect} />
       </div>
     </section>
   );
@@ -215,22 +201,19 @@ export function ChangeCohortButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-[10px]">
-          Change cohort
-          <ChevronsUpDown className="size-3.5" aria-hidden />
+        <Button variant="soft" size="sm" aria-label="Change cancer or cohort">
+          <Replace className="size-4" aria-hidden />
+          Change
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl overflow-hidden rounded-[16px] p-0 sm:rounded-[16px] sm:p-0">
+      <DialogContent className="max-w-5xl overflow-hidden rounded-[28px] p-0 sm:rounded-[28px] sm:p-0">
         <div className="px-6 pb-4 pt-6 sm:px-8 sm:pt-7">
-          <DialogTitle>Choose a cohort</DialogTitle>
-          <DialogDescription className="mt-1.5">
-            Start with a cancer type, or search the full release.
-          </DialogDescription>
+          <DialogTitle>Choose cancer or cohort</DialogTitle>
+          <DialogDescription className="mt-1.5">Browse by group or search directly.</DialogDescription>
         </div>
         <div className="border-t border-line">
           <CohortPicker
             cohorts={cohorts}
-            autoFocus
             onSelect={(id) => {
               onSelect(id);
               setOpen(false);

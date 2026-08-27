@@ -21,7 +21,6 @@ function result(index: number, q = 0.001): InteractionResult {
     representative: row,
     matches: [{ bmr: "cbase", row, percentile: (index + 1) / 100 }],
     pairEvidence: [{ bmr: "cbase", row }],
-    fdrSupport: 1,
     mutsigFallbackFeatures: [],
     worstPercentile: (index + 1) / 100,
     medianPercentile: (index + 1) / 100,

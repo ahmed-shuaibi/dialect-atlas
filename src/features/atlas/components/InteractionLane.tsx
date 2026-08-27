@@ -1,8 +1,8 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { resultEffectText } from "@/features/atlas/components/explore-display";
-import { SignificanceMark } from "@/features/atlas/components/SignificanceMark";
-import { modelAgreement, resultQ } from "@/features/atlas/lib/atlas-transform";
+import { fmtQ, modelAgreement, resultIsSignificant, resultQ } from "@/features/atlas/lib/atlas-transform";
 import type { AtlasMode, Direction, InteractionResult } from "@/features/atlas/types";
 import { cn } from "@/lib/utils";
 
@@ -23,11 +23,13 @@ export function InteractionLane({
   direction,
   results,
   mode,
+  qThreshold,
   onSelect,
 }: {
   direction: Direction;
   results: InteractionResult[];
   mode: AtlasMode;
+  qThreshold: number;
   onSelect: (result: InteractionResult) => void;
 }) {
   const copy = DIRECTION_COPY[direction];
@@ -35,41 +37,43 @@ export function InteractionLane({
   useEffect(() => setVisible(LIST_PAGE_SIZE), [results]);
   const shown = results.slice(0, visible);
   return (
-    <section aria-labelledby={`${direction}-heading`} className="min-w-0">
-      <header className="mb-3 flex items-end justify-between gap-4 border-b-2 border-ink pb-3">
+    <section aria-labelledby={`${direction}-heading`} className="surface-card min-w-0 overflow-hidden">
+      <header className="flex items-end justify-between gap-4 border-b border-line px-5 py-5">
         <div>
           <h2
             id={`${direction}-heading`}
-            className="text-xl font-bold leading-tight tracking-[-0.025em] sm:text-2xl"
+            className="text-xl font-semibold leading-tight sm:text-2xl"
           >
             {copy.title}
           </h2>
-          <p className="mt-1 text-xs leading-5 text-muted">{copy.detail}</p>
+          <p className="mt-1 text-sm leading-5 text-muted">{copy.detail}</p>
         </div>
-        <p className="shrink-0 font-mono text-xs text-muted">
+        <p className="shrink-0 font-mono text-sm text-muted">
           {results.length} {results.length === 1 ? "pair" : "pairs"}
         </p>
       </header>
 
       {results.length === 0 ? (
-        <p className="border-b border-line py-10 text-sm text-muted">
-          No significant {direction} interactions.
+        <p className="px-5 py-12 text-base text-muted">
+          No {direction} pairs in this view.
         </p>
       ) : (
-        <ol>
-          {shown.map((result, index) => {
-            const agreement = modelAgreement(result);
+        <ol className="space-y-1 p-2">
+          {shown.map((result) => {
+            const agreement = modelAgreement(result, qThreshold);
+            const significant = resultIsSignificant(result, mode, qThreshold);
+            const q = resultQ(result, mode);
             return (
-              <li key={result.id} className="border-b border-line" data-result-id={result.id}>
+              <li key={result.id} data-result-id={result.id}>
                 <button
                   type="button"
                   onClick={() => onSelect(result)}
-                  className="focus-ring group grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 py-4 text-left transition-colors hover:bg-paper/70 sm:grid-cols-[2rem_minmax(0,1fr)_auto_auto_auto] sm:px-2"
+                  className={cn(
+                    "focus-ring group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-4 text-left transition-colors hover:bg-sand sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]",
+                    significant && "bg-support-soft/60",
+                  )}
                 >
-                  <span className="row-span-2 font-mono text-[11px] text-muted sm:row-span-1">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <span className="min-w-0 font-mono text-sm font-semibold tracking-[-0.02em]">
+                  <span className="min-w-0 font-mono text-[15px] font-semibold tracking-[-0.015em]">
                     <span className="break-words">{result.ga}</span>
                     <span
                       aria-hidden
@@ -80,20 +84,24 @@ export function InteractionLane({
                     />
                     <span className="break-words">{result.gb}</span>
                   </span>
-                  <span className="hidden font-mono text-xs font-medium sm:block">
+                  <span className="hidden font-mono text-[13px] font-medium sm:block">
                     {resultEffectText(result, mode)}
                   </span>
-                  <SignificanceMark q={resultQ(result, mode)} />
-                  <span className="hidden whitespace-nowrap text-[11px] font-semibold text-muted sm:block">
-                    {agreement}/3 models
+                  <span className="hidden whitespace-nowrap font-mono text-[13px] text-muted sm:block">
+                    {mode === "consensus" ? "max " : ""}q {fmtQ(q)}
                   </span>
-                  <ArrowUpRight
-                    className="size-4 text-muted transition-colors group-hover:text-ink sm:hidden"
-                    aria-hidden
-                  />
-                  <span className="col-start-2 flex items-center gap-3 text-[11px] font-semibold sm:hidden">
+                  <span className="flex items-center justify-end gap-2 text-sm font-semibold text-muted">
+                    {significant && (
+                      <span className="grid size-6 place-items-center rounded-full bg-support text-paper" aria-label={`Significant at q ${fmtQ(q)}`}>
+                        <Check className="size-3.5" strokeWidth={2.6} aria-hidden />
+                      </span>
+                    )}
+                    <ArrowUpRight className="size-4 transition-colors group-hover:text-ink" aria-hidden />
+                  </span>
+                  <span className="col-start-1 flex items-center gap-3 text-[13px] font-semibold sm:hidden">
                     <span className="font-mono">{resultEffectText(result, mode)}</span>
-                    <span className="text-muted">{agreement}/3 models</span>
+                    <span className="font-mono text-muted">{mode === "consensus" ? "max " : ""}q {fmtQ(q)}</span>
+                    <span className="text-muted">{agreement}/3 significant</span>
                   </span>
                 </button>
               </li>
@@ -102,13 +110,14 @@ export function InteractionLane({
         </ol>
       )}
       {visible < results.length && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setVisible((value) => Math.min(value + LIST_PAGE_SIZE, results.length))}
-          className="focus-ring mt-3 w-full border border-line bg-paper px-4 py-3 text-xs font-bold text-muted hover:border-ink/30 hover:text-ink"
+          className="m-3 w-[calc(100%-1.5rem)]"
         >
           Show {Math.min(LIST_PAGE_SIZE, results.length - visible)} more
-        </button>
+        </Button>
       )}
     </section>
   );

@@ -1,11 +1,11 @@
 import {
   BMR_IDS,
+  DEFAULT_Q_THRESHOLD,
   type AtlasMode,
   type Bmr,
   type CohortData,
   type DialectRow,
   type Direction,
-  type ExploreDirection,
   type InteractionResult,
   type ModelMatch,
   type PairEvidence,
@@ -49,8 +49,10 @@ export function parsePairId(value: string | undefined): PairSelection | null {
 export const isSameBaseGene = (row: Pick<DialectRow, "ga" | "gb">) =>
   baseGene(row.ga) === baseGene(row.gb);
 
-export const isSignificant = (row: Pick<DialectRow, "q">): boolean =>
-  row.q != null && row.q < 0.01;
+export const isSignificant = (
+  row: Pick<DialectRow, "q">,
+  qThreshold = DEFAULT_Q_THRESHOLD,
+): boolean => row.q != null && row.q < qThreshold;
 
 /** Negative fitted LRT values carry zero evidence under the release contract. */
 export const lrtEvidence = (row: Pick<DialectRow, "lrt">) => Math.max(0, row.lrt);
@@ -176,7 +178,6 @@ function toResult(data: CohortData, representative: DialectRow & { direction: Di
     representative,
     matches,
     pairEvidence,
-    fdrSupport: matches.filter((match) => match.row.q != null && match.row.q < 0.01).length,
     mutsigFallbackFeatures: pairEvidence.some(({ bmr }) => bmr === "mutsig")
       ? mutsigFallbackForPair(data, representative.ga, representative.gb)
       : [],
@@ -186,11 +187,20 @@ function toResult(data: CohortData, representative: DialectRow & { direction: Di
 }
 
 /**
- * Significant three-BMR consensus: the exact gene-effect pair has the same direction and
- * q < 0.01 under CBaSE, DIG, and a real MutSigCV2 background. Results are ordered
- * conservatively by the worst directional rank percentile, then the median percentile.
+ * Three-BMR consensus: the exact gene-effect pair has the same direction under CBaSE,
+ * DIG, and a real MutSigCV2 background. Optional significance filtering applies the
+ * selected q cutoff to every model. Results use conservative directional rank percentiles.
  */
-export function consensusResults(data: CohortData, direction: Direction): InteractionResult[] {
+export type ResultFilter = {
+  qThreshold?: number;
+  significantOnly?: boolean;
+};
+
+export function consensusResults(
+  data: CohortData,
+  direction: Direction,
+  { qThreshold = DEFAULT_Q_THRESHOLD, significantOnly = true }: ResultFilter = {},
+): InteractionResult[] {
   const seen = new Set<string>();
   const results: InteractionResult[] = [];
   for (const row of data.models.cbase) {
@@ -201,7 +211,7 @@ export function consensusResults(data: CohortData, direction: Direction): Intera
     seen.add(id);
     const result = toResult(data, row as DialectRow & { direction: Direction });
     if (result.matches.length !== BMR_IDS.length) continue;
-    if (!result.matches.every(({ row: match }) => isSignificant(match))) continue;
+    if (significantOnly && !result.matches.every(({ row: match }) => isSignificant(match, qThreshold))) continue;
     results.push(result);
   }
   return results.sort(
@@ -216,6 +226,7 @@ export function modelResults(
   data: CohortData,
   bmr: Bmr,
   direction: Direction,
+  { qThreshold = DEFAULT_Q_THRESHOLD, significantOnly = true }: ResultFilter = {},
 ): InteractionResult[] {
   const results = data.models[bmr]
     .filter((row): row is DialectRow & { direction: Direction } => isDirection(row))
@@ -223,7 +234,7 @@ export function modelResults(
       (row) =>
         row.direction === direction &&
         !isSameBaseGene(row) &&
-        isSignificant(row),
+        (!significantOnly || isSignificant(row, qThreshold)),
     )
     .map((row) => toResult(data, row));
 
@@ -237,24 +248,22 @@ export function resultsForMode(
   data: CohortData,
   mode: AtlasMode,
   direction: Direction,
+  filter: ResultFilter = {},
 ): InteractionResult[] {
   return mode === "consensus"
-    ? consensusResults(data, direction)
-    : modelResults(data, mode, direction);
+    ? consensusResults(data, direction, filter)
+    : modelResults(data, mode, direction, filter);
 }
 
-/** The exact significant result set shared by Explore's network and list renderers. */
+/** The exact ranked candidate set shared by Explore's network and list renderers. */
 export function exploreResults(
   data: CohortData,
   mode: AtlasMode,
-  direction: ExploreDirection,
+  filter: ResultFilter = {},
 ): InteractionResult[] {
-  if (direction === "ME" || direction === "CO") {
-    return resultsForMode(data, mode, direction);
-  }
   return [
-    ...resultsForMode(data, mode, "ME"),
-    ...resultsForMode(data, mode, "CO"),
+    ...resultsForMode(data, mode, "ME", filter),
+    ...resultsForMode(data, mode, "CO", filter),
   ];
 }
 
@@ -281,11 +290,14 @@ export function resultQ(result: InteractionResult, mode: AtlasMode): number {
   return Math.max(...result.matches.map(({ row }) => row.q ?? 1));
 }
 
-/** Number of distinct background models supporting the result at q < 0.01. */
-export function modelAgreement(result: InteractionResult): number {
+/** Number of distinct background models supporting the result at the selected q cutoff. */
+export function modelAgreement(
+  result: InteractionResult,
+  qThreshold = DEFAULT_Q_THRESHOLD,
+): number {
   return result.matches.filter(
     ({ bmr, row }) =>
-      isSignificant(row) &&
+      isSignificant(row, qThreshold) &&
       !(bmr === "mutsig" && result.mutsigFallbackFeatures.length > 0),
   ).length;
 }
@@ -304,17 +316,36 @@ export function findResultForMode(
   data: CohortData,
   selection: PairSelection,
   mode: AtlasMode,
+  filter: ResultFilter = {},
 ): InteractionResult | null {
   if (mode === "consensus") {
-    return consensusResults(data, selection.direction).find(
+    return consensusResults(data, selection.direction, filter).find(
       ({ id }) => id === resultId(selection.direction, selection.ga, selection.gb),
     ) ?? null;
   }
   const row = cohortIndexes(data).byModel[mode].get(
     resultId(selection.direction, selection.ga, selection.gb),
   );
-  if (!row || !isDirection(row) || isSameBaseGene(row) || !isSignificant(row)) return null;
+  if (!row || !isDirection(row) || isSameBaseGene(row)) return null;
+  const { qThreshold = DEFAULT_Q_THRESHOLD, significantOnly = true } = filter;
+  if (significantOnly && !isSignificant(row, qThreshold)) return null;
   return toResult(data, row);
+}
+
+export function resultIsSignificant(
+  result: InteractionResult,
+  mode: AtlasMode,
+  qThreshold = DEFAULT_Q_THRESHOLD,
+): boolean {
+  if (mode === "consensus") {
+    return (
+      result.matches.length === BMR_IDS.length &&
+      result.mutsigFallbackFeatures.length === 0 &&
+      result.matches.every(({ row }) => isSignificant(row, qThreshold))
+    );
+  }
+  const match = result.matches.find(({ bmr }) => bmr === mode);
+  return match != null && isSignificant(match.row, qThreshold);
 }
 
 export const fmtInt = (value: number) => value.toLocaleString("en-US");

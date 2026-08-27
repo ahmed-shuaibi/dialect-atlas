@@ -5,6 +5,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EvidenceStatus, type EvidenceState } from "@/components/ui/evidence-status";
 import {
   BMR_LABEL,
   fmtInt,
@@ -14,6 +15,7 @@ import {
 } from "@/features/atlas/lib/atlas-transform";
 import {
   BMR_IDS,
+  DEFAULT_Q_THRESHOLD,
   type AtlasMode,
   type Bmr,
   type CohortData,
@@ -27,9 +29,9 @@ function lrtLabel(row: DialectRow): string {
   return fmtStat(lrtEvidence(row), 2);
 }
 
-function modelState(row: DialectRow | undefined, result: InteractionResult) {
+function modelState(row: DialectRow | undefined, result: InteractionResult, qThreshold: number) {
   if (!row) return "missing" as const;
-  if (row.q != null && row.q < 0.01 && (row.direction === "ME" || row.direction === "CO")) {
+  if (row.q != null && row.q < qThreshold && (row.direction === "ME" || row.direction === "CO")) {
     return row.direction === result.direction
       ? ("significant" as const)
       : ("opposite" as const);
@@ -51,39 +53,41 @@ function EvidenceRow({
   bmr,
   row,
   result,
+  qThreshold,
 }: {
   bmr: Bmr;
   row: DialectRow | undefined;
   result: InteractionResult;
+  qThreshold: number;
 }) {
-  const state = modelState(row, result);
-  const effectLabel = result.direction === "ME" ? "ρ" : "LRT";
+  const state = modelState(row, result, qThreshold);
   const fallback = bmr === "mutsig" && result.mutsigFallbackFeatures.length > 0 && row;
+  const effect = row?.direction === "ME"
+    ? { label: "ρ", value: fmtStat(row.rho) }
+    : row?.direction === "CO"
+      ? { label: "LRT", value: lrtLabel(row) }
+      : { label: "Effect", value: "not assigned" };
   return (
-    <article className="border border-line bg-paper px-4 py-3">
+    <article className="rounded-2xl border border-line bg-paper px-4 py-3.5">
       <div className="flex items-start justify-between gap-3">
         <h4 className="text-sm font-black">{BMR_LABEL[bmr]}</h4>
-        <span
-          className={cn(
-            "text-[11px] font-bold",
-            state === "significant"
-              ? "text-support"
-              : state === "opposite"
-                ? "text-alert"
-                : "text-muted",
-          )}
-        >
-          <span aria-hidden>{state === "significant" ? "✓" : state === "opposite" ? "△" : state === "missing" ? "—" : "○"}</span>{" "}
-          {stateLabel(state, row)}
+        <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+          <EvidenceStatus
+            state={({ significant: "supported", opposite: "warning", missing: "missing", "not-significant": "unsupported" } as const)[state] as EvidenceState}
+            label={stateLabel(state, row)}
+          />
+          <span className={state === "significant" ? "text-support" : state === "opposite" ? "text-alert" : "text-muted"}>
+            {stateLabel(state, row)}
+          </span>
         </span>
       </div>
       {row ? (
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-5">
           <div>
-            <dt className="text-[10px] font-bold text-muted">Direction</dt>
+            <dt className="text-xs font-semibold text-muted">Direction</dt>
             <dd
               className={cn(
-                "mt-0.5 text-xs font-black",
+                "mt-0.5 text-sm font-semibold",
                 row.direction === "ME" && "text-me",
                 row.direction === "CO" && "text-co",
                 row.direction === "neutral" && "text-muted",
@@ -93,28 +97,28 @@ function EvidenceRow({
             </dd>
           </div>
           <div>
-            <dt className="text-[10px] font-bold text-muted">q</dt>
-            <dd className="mt-0.5 font-mono text-xs tabular-nums">{fmtQ(row.q)}</dd>
+            <dt className="text-xs font-semibold text-muted">q</dt>
+            <dd className="mt-0.5 font-mono text-[13px] tabular-nums">{fmtQ(row.q)}</dd>
           </div>
           <div>
-            <dt className="text-[10px] font-bold text-muted">{effectLabel}</dt>
-            <dd className="mt-0.5 font-mono text-xs tabular-nums">
-              {result.direction === "ME" ? fmtStat(row.rho) : lrtLabel(row)}
+            <dt className="text-xs font-semibold text-muted">{effect.label}</dt>
+            <dd className="mt-0.5 font-mono text-[13px] tabular-nums">
+              {effect.value}
             </dd>
           </div>
           <div>
-            <dt className="text-[10px] font-bold text-muted">Rank</dt>
-            <dd className="mt-0.5 font-mono text-xs tabular-nums">{fmtInt(row.rank)}</dd>
+            <dt className="text-xs font-semibold text-muted">Rank</dt>
+            <dd className="mt-0.5 font-mono text-[13px] tabular-nums">{fmtInt(row.rank)}</dd>
           </div>
           <div>
-            <dt className="text-[10px] font-bold text-muted">EM n</dt>
-            <dd className="mt-0.5 font-mono text-xs tabular-nums">
+            <dt className="text-xs font-semibold text-muted">EM n</dt>
+            <dd className="mt-0.5 font-mono text-[13px] tabular-nums">
               {fmtInt(row.effectiveN)}/{fmtInt(row.effectiveN + row.excludedSamples)}
             </dd>
           </div>
         </dl>
       ) : (
-        <p className="mt-3 text-xs text-muted">No result for this pair.</p>
+        <p className="mt-3 text-sm text-muted">No result for this pair.</p>
       )}
       {fallback && (
         <p className="mt-2 text-[10px] font-bold text-alert">CBaSE fallback</p>
@@ -147,7 +151,7 @@ function ObservedMatrix({ row, result }: { row: DialectRow; result: InteractionR
     { label: `${result.ga} not mutated, ${result.gb} not mutated`, value: row.observedNeither },
   ];
   return (
-    <div className="grid grid-cols-[auto_repeat(2,minmax(0,1fr))] items-stretch gap-1 text-[10px]">
+    <div className="grid grid-cols-[auto_repeat(2,minmax(0,1fr))] items-stretch gap-1.5 text-xs">
       <span />
       <span className="self-end px-1 pb-1 text-center font-bold leading-tight">{result.gb} +</span>
       <span className="self-end px-1 pb-1 text-center font-bold leading-tight">{result.gb} −</span>
@@ -156,7 +160,7 @@ function ObservedMatrix({ row, result }: { row: DialectRow; result: InteractionR
         <div
           key={cell.label}
           className={cn(
-            "grid min-h-14 place-items-center px-2 py-3 font-mono text-sm font-bold tabular-nums",
+            "grid min-h-14 place-items-center rounded-xl px-2 py-3 font-mono text-sm font-bold tabular-nums",
             heatClass(cell.value, maximum),
           )}
           aria-label={`${cell.label}: ${fmtInt(cell.value)} tumors`}
@@ -169,7 +173,7 @@ function ObservedMatrix({ row, result }: { row: DialectRow; result: InteractionR
         <div
           key={cell.label}
           className={cn(
-            "grid min-h-14 place-items-center px-2 py-3 font-mono text-sm font-bold tabular-nums",
+            "grid min-h-14 place-items-center rounded-xl px-2 py-3 font-mono text-sm font-bold tabular-nums",
             heatClass(cell.value, maximum),
           )}
           aria-label={`${cell.label}: ${fmtInt(cell.value)} tumors`}
@@ -185,12 +189,13 @@ export type PairDialogProps = {
   result: InteractionResult | null;
   data: CohortData;
   mode: AtlasMode;
+  qThreshold: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
 export function PairDialog(props: PairDialogProps) {
-  const { result, mode, open, onOpenChange } = props;
+  const { result, mode, qThreshold = DEFAULT_Q_THRESHOLD, open, onOpenChange } = props;
   if (!result) return null;
   const evidenceByModel = Object.fromEntries(
     BMR_IDS.map((bmr) => [
@@ -198,16 +203,22 @@ export function PairDialog(props: PairDialogProps) {
       result.pairEvidence.find((item) => item.bmr === bmr)?.row,
     ]),
   ) as Record<Bmr, DialectRow | undefined>;
-  const directionAgreement = BMR_IDS.filter(
+  const hasMutsigFallback =
+    evidenceByModel.mutsig != null && result.mutsigFallbackFeatures.length > 0;
+  const independentBackgrounds = BMR_IDS.filter(
+    (bmr) => bmr !== "mutsig" || !hasMutsigFallback,
+  );
+  const directionAgreement = independentBackgrounds.filter(
     (bmr) => evidenceByModel[bmr]?.direction === result.direction,
   ).length;
-  const significantSupport = BMR_IDS.filter(
-    (bmr) => modelState(evidenceByModel[bmr], result) === "significant",
+  const significantSupport = independentBackgrounds.filter(
+    (bmr) => modelState(evidenceByModel[bmr], result, qThreshold) === "significant",
   ).length;
   const allThreeSignificant =
-    significantSupport === BMR_IDS.length && result.mutsigFallbackFeatures.length === 0;
+    independentBackgrounds.length === BMR_IDS.length &&
+    significantSupport === BMR_IDS.length;
   const selectedRow = mode === "consensus" ? undefined : evidenceByModel[mode];
-  const selectedState = mode === "consensus" ? undefined : modelState(selectedRow, result);
+  const selectedState = mode === "consensus" ? undefined : modelState(selectedRow, result, qThreshold);
   const selectedFallback =
     mode === "mutsig" &&
     selectedRow != null &&
@@ -216,7 +227,7 @@ export function PairDialog(props: PairDialogProps) {
     mode === "consensus"
       ? allThreeSignificant
         ? "Significant under all 3 backgrounds"
-        : significantSupport === BMR_IDS.length && result.mutsigFallbackFeatures.length > 0
+        : hasMutsigFallback && significantSupport === independentBackgrounds.length
           ? "Not supported by 3 distinct backgrounds"
           : "Not significant under all 3 backgrounds"
       : selectedState === "significant"
@@ -250,7 +261,7 @@ export function PairDialog(props: PairDialogProps) {
           </DialogDescription>
           <p className="mt-3 text-base font-black">{lead}</p>
           <p className="mt-1 text-xs font-semibold text-muted">
-            {directionAgreement}/3 backgrounds agree on {result.direction}; {significantSupport}/3 meet q &lt; 0.01 in that direction.
+            {directionAgreement}/{independentBackgrounds.length} distinct backgrounds agree on {result.direction}; {significantSupport}/{independentBackgrounds.length} meet q &lt; {qThreshold}.
           </p>
           {result.mutsigFallbackFeatures.length > 0 && (
             <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-alert">
@@ -269,6 +280,7 @@ export function PairDialog(props: PairDialogProps) {
                   bmr={bmr}
                   row={evidenceByModel[bmr]}
                   result={result}
+                  qThreshold={qThreshold}
                 />
               ))}
             </div>
@@ -276,7 +288,7 @@ export function PairDialog(props: PairDialogProps) {
 
           <section aria-labelledby="observed-heading">
             <h3 id="observed-heading" className="text-sm font-black">Observed tumors</h3>
-            <p className="mt-1 text-[10px] leading-4 text-muted">Mutation counts, not latent probabilities.</p>
+            <p className="mt-1 text-xs leading-5 text-muted">Mutation counts, not latent probabilities.</p>
             <div className="mt-3">
               <ObservedMatrix row={active} result={result} />
             </div>
@@ -284,13 +296,13 @@ export function PairDialog(props: PairDialogProps) {
         </div>
 
         <details className="mt-6 border-t border-line pt-4">
-          <summary className="focus-ring cursor-pointer text-xs font-black">Technical details</summary>
+          <summary className="focus-ring cursor-pointer rounded-full text-sm font-semibold">Technical details</summary>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {BMR_IDS.map((bmr) => {
               const row = evidenceByModel[bmr];
               if (!row) {
                 return (
-                  <div key={bmr} className="border border-line p-3 text-xs text-muted">
+                  <div key={bmr} className="rounded-2xl border border-line p-3 text-sm text-muted">
                     <p className="font-bold text-ink">{BMR_LABEL[bmr]}</p>
                     <p className="mt-2">Not tested.</p>
                   </div>
@@ -299,7 +311,7 @@ export function PairDialog(props: PairDialogProps) {
               const fallback =
                 bmr === "mutsig" && result.mutsigFallbackFeatures.length > 0;
               return (
-                <div key={bmr} className="border border-line p-3">
+                <div key={bmr} className="rounded-2xl border border-line p-3">
                   <p className="text-xs font-black">{BMR_LABEL[bmr]}</p>
                   <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px] tabular-nums">
                     <div><dt className="inline text-muted">τ₀₀ </dt><dd className="inline">{fmtStat(row.tau00)}</dd></div>

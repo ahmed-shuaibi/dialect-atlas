@@ -15,7 +15,6 @@ import {
   findResult,
   findResultForMode,
   parsePairId,
-  resultsForMode,
 } from "@/features/atlas/lib/atlas-transform";
 import type { InteractionResult } from "@/features/atlas/types";
 import { useHashState } from "@/lib/useHashState";
@@ -69,19 +68,12 @@ export function App() {
       cohort.data && selection
         ? url.view === "compare"
           ? findResult(cohort.data, selection)
-          : findResultForMode(cohort.data, selection, url.mode)
+          : findResultForMode(cohort.data, selection, url.mode, {
+              qThreshold: url.qThreshold,
+              significantOnly: url.significantOnly,
+            })
         : null,
-    [cohort.data, selection, url.mode, url.view],
-  );
-  const significantCounts = useMemo(
-    () =>
-      cohort.data
-        ? {
-            me: resultsForMode(cohort.data, url.mode, "ME").length,
-            co: resultsForMode(cohort.data, url.mode, "CO").length,
-          }
-        : { me: null, co: null },
-    [cohort.data, url.mode],
+    [cohort.data, selection, url.mode, url.qThreshold, url.significantOnly, url.view],
   );
 
   useEffect(() => {
@@ -131,16 +123,15 @@ export function App() {
               <CohortHeader
                 cohort={cohortMeta}
                 cohorts={release.data.index.cohorts}
-                mode={url.mode}
                 onCohortChange={chooseCohort}
-                significantMeCount={significantCounts.me}
-                significantCoCount={significantCounts.co}
                 settings={
                   <SettingsDrawer
                     open={url.settings}
                     mode={url.mode}
+                    qThreshold={url.qThreshold}
                     onOpenChange={(settings) => setUrl({ settings }, { replace: !settings })}
                     onModeChange={(mode) => setUrl({ mode, pair: undefined })}
+                    onQThresholdChange={(qThreshold) => setUrl({ qThreshold, pair: undefined })}
                   />
                 }
               />
@@ -154,12 +145,12 @@ export function App() {
                   data={cohort.data}
                   mode={url.mode}
                   display={url.exploreDisplay}
-                  direction={url.exploreDirection}
+                  qThreshold={url.qThreshold}
+                  significantOnly={url.significantOnly}
                   onDisplayChange={(exploreDisplay) => setUrl({ exploreDisplay })}
-                  onDirectionChange={(exploreDirection) =>
-                    setUrl({ exploreDirection, pair: undefined })
+                  onSignificantOnlyChange={(significantOnly) =>
+                    setUrl({ significantOnly, pair: undefined })
                   }
-                  onOpenSettings={() => setUrl({ settings: true })}
                   onSelect={selectPair}
                 />
               )}
@@ -167,9 +158,7 @@ export function App() {
                 <CompareView
                   data={cohort.data}
                   manifestMethods={release.data.manifest.methods}
-                  mode={url.mode}
-                  direction={url.compareDirection}
-                  onDirectionChange={(compareDirection) => setUrl({ compareDirection, pair: undefined })}
+                  qThreshold={url.qThreshold}
                   onSelect={selectPair}
                 />
               )}
@@ -179,6 +168,7 @@ export function App() {
                   result={selectedResult}
                   data={cohort.data}
                   mode={url.mode}
+                  qThreshold={url.qThreshold}
                   open={selectedResult != null}
                   onOpenChange={(open) => !open && setUrl({ pair: undefined }, { replace: true })}
                 />

@@ -7,6 +7,7 @@ import {
 } from "@/features/atlas/lib/atlas-transform";
 import {
   BMR_IDS,
+  DEFAULT_Q_THRESHOLD,
   type BaselineRow,
   type Bmr,
   type CohortData,
@@ -81,19 +82,20 @@ function methodAvailable(tokens: Set<string>, name: string): boolean {
 export function comparisonMethods(
   direction: Direction,
   manifestMethods: unknown,
+  qThreshold = DEFAULT_Q_THRESHOLD,
 ): CompareMethod[] {
   const tokens = methodTokens(manifestMethods);
   const methods: CompareMethod[] = BMR_IDS.map((id) => ({
     id,
     label: BMR_LABEL[id],
     measure: "q" as const,
-    threshold: 0.01,
+    threshold: qThreshold,
   }));
   if (methodAvailable(tokens, "fisher")) {
-    methods.push({ id: "fisher", label: "Fisher", measure: "q", threshold: 0.01 });
+    methods.push({ id: "fisher", label: "Fisher", measure: "q", threshold: qThreshold });
   }
   if (methodAvailable(tokens, "discover")) {
-    methods.push({ id: "discover", label: "DISCOVER", measure: "q", threshold: 0.01 });
+    methods.push({ id: "discover", label: "DISCOVER", measure: "q", threshold: qThreshold });
   }
   if (direction === "ME" && methodAvailable(tokens, "megsa")) {
     methods.push({ id: "megsa", label: "MEGSA", measure: "p", threshold: 0.001 });
@@ -104,7 +106,7 @@ export function comparisonMethods(
       id: "wes",
       label: direction === "ME" ? "WeSME" : "WeSCO",
       measure: "q",
-      threshold: 0.01,
+      threshold: qThreshold,
     });
   }
   return methods;

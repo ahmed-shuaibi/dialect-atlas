@@ -1,10 +1,12 @@
 export const BMR_IDS = ["cbase", "dig", "mutsig"] as const;
+export const Q_THRESHOLDS = [0.001, 0.005, 0.01, 0.05] as const;
+export const DEFAULT_Q_THRESHOLD = 0.01;
 
 export type Bmr = (typeof BMR_IDS)[number];
+export type QThreshold = (typeof Q_THRESHOLDS)[number];
 export type AtlasView = "explore" | "compare" | "about";
 export type AtlasMode = "consensus" | Bmr;
 export type Direction = "ME" | "CO";
-export type ExploreDirection = "all" | Direction;
 export type ExploreDisplay = "network" | "list";
 export type TransportDirection = Direction | "neutral";
 
@@ -128,7 +130,6 @@ export interface InteractionResult {
   matches: ModelMatch[];
   /** Every model row for this pair, including opposite and neutral directions. */
   pairEvidence: PairEvidence[];
-  fdrSupport: number;
   mutsigFallbackFeatures: string[];
   worstPercentile: number;
   medianPercentile: number;
@@ -147,6 +148,6 @@ export interface AtlasUrlState {
   pair?: string;
   settings: boolean;
   exploreDisplay: ExploreDisplay;
-  exploreDirection: ExploreDirection;
-  compareDirection: Direction;
+  qThreshold: QThreshold;
+  significantOnly: boolean;
 }
