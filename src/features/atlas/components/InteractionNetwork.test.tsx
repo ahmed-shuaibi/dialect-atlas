@@ -121,6 +121,8 @@ describe("InteractionNetwork", () => {
         totalResults={2}
         mode="cbase"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         likelyPassengers={new Set()}
         highlightLikelyPassengers={false}
         onSelect={vi.fn()}
@@ -166,6 +168,8 @@ describe("InteractionNetwork", () => {
         totalResults={2}
         mode="cbase"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         likelyPassengers={new Set()}
         highlightLikelyPassengers={false}
         onSelect={vi.fn()}
@@ -180,7 +184,7 @@ describe("InteractionNetwork", () => {
       return element!;
     });
     expect(edge).toHaveAttribute("tabindex", "0");
-    expect(edge).toHaveAccessibleName(/mutually exclusive; significant at q 0\.0010/i);
+    expect(edge).toHaveAccessibleName(/mutually exclusive; significant; q 0\.0010/i);
     expect(edge).toHaveClass("selectable");
 
     const visiblePath = edge.querySelector<SVGPathElement>(".react-flow__edge-path");
@@ -199,6 +203,8 @@ describe("InteractionNetwork", () => {
         totalResults={1}
         mode="cbase"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         likelyPassengers={new Set()}
         highlightLikelyPassengers={false}
         onSelect={vi.fn()}
@@ -220,6 +226,8 @@ describe("InteractionNetwork", () => {
         totalResults={1}
         mode="cbase"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         likelyPassengers={new Set()}
         highlightLikelyPassengers={false}
         onSelect={vi.fn()}

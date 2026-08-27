@@ -21,6 +21,8 @@ describe("Atlas hash state", () => {
       settings: true,
       exploreDisplay: "network" as const,
       qThreshold: 0.005 as const,
+      minIdentifiedBmrs: 2 as const,
+      minSignificantBmrs: 1 as const,
       significantOnly: true,
       compareDirection: "CO" as const,
       highlightLikelyPassengers: true,
@@ -28,9 +30,9 @@ describe("Atlas hash state", () => {
     expect(parseAtlasHash(serializeAtlasHash(state))).toEqual(state);
   });
 
-  it("coerces invalid enums and q cutoffs to safe defaults", () => {
+  it("coerces invalid enums, q cutoffs, and BMR counts to safe defaults", () => {
     const parsed = parseAtlasHash(
-      "#view=nope&mode=nope&settings=0&display=nope&q=0.02&significant=nope",
+      "#view=nope&mode=nope&settings=0&display=nope&q=0.02&identify=0&sigbmrs=4&significant=nope",
     );
     expect(parsed).toEqual(URL_DEFAULTS);
   });
@@ -41,9 +43,28 @@ describe("Atlas hash state", () => {
       serializeAtlasHash({
         ...URL_DEFAULTS,
         qThreshold: 0.05,
+        minIdentifiedBmrs: 2,
+        minSignificantBmrs: 1,
         significantOnly: true,
       }),
-    ).toBe("#view=explore&mode=consensus&display=list&q=0.05&significant=1");
+    ).toBe(
+      "#view=explore&mode=consensus&display=list&q=0.05&identify=2&sigbmrs=1&significant=1",
+    );
+  });
+
+  it("keeps identification and significance minima independent", () => {
+    expect(parseAtlasHash("#identify=1&sigbmrs=2")).toMatchObject({
+      minIdentifiedBmrs: 1,
+      minSignificantBmrs: 2,
+    });
+    expect(parseAtlasHash("#identify=2&sigbmrs=1")).toMatchObject({
+      minIdentifiedBmrs: 2,
+      minSignificantBmrs: 1,
+    });
+    expect(parseAtlasHash("#identify=3&sigbmrs=3")).toMatchObject({
+      minIdentifiedBmrs: 3,
+      minSignificantBmrs: 3,
+    });
   });
 
   it("ignores removed settings while preserving the comparison direction", () => {

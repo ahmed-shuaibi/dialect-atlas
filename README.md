@@ -10,7 +10,8 @@ co-occurring interactions in one list or an interactive network, or compare
 DIALECT with Fisher, DISCOVER, MEGSA, WeSME, and WeSCO. The default view requires
 the same pair and direction under CBaSE, DIG, and a real MutSigCV2 background;
 CBaSE fallback features are not counted as MutSigCV2 support. `Significant only`
-applies the selected q-value cutoff across all three backgrounds.
+defaults to agreement and significance across all three backgrounds. Both minima
+and the q-value cutoff are configurable in the Atlas.
 
 The published `k100-2026-08-26` release contains every evaluated pair from up
 to 100 count-ranked, provider-eligible features in each of 71 TCGA, MSK-IMPACT,

@@ -77,13 +77,24 @@ export function App() {
     () =>
       cohort.data && selection
         ? url.view === "compare"
-          ? findResult(cohort.data, selection)
-          : findResultForMode(cohort.data, selection, url.mode, {
+            ? findResult(cohort.data, selection)
+            : findResultForMode(cohort.data, selection, url.mode, {
               qThreshold: url.qThreshold,
+              minIdentifiedBmrs: url.minIdentifiedBmrs,
+              minSignificantBmrs: url.minSignificantBmrs,
               significantOnly: url.significantOnly,
             })
         : null,
-    [cohort.data, selection, url.mode, url.qThreshold, url.significantOnly, url.view],
+    [
+      cohort.data,
+      selection,
+      url.minIdentifiedBmrs,
+      url.minSignificantBmrs,
+      url.mode,
+      url.qThreshold,
+      url.significantOnly,
+      url.view,
+    ],
   );
 
   useEffect(() => {
@@ -105,12 +116,21 @@ export function App() {
     <SettingsDrawer
       open={url.settings}
       showBackground={url.view === "explore"}
+      showConsensusThresholds={url.view === "explore" && url.mode === "consensus"}
       mode={url.mode}
       qThreshold={url.qThreshold}
+      minIdentifiedBmrs={url.minIdentifiedBmrs}
+      minSignificantBmrs={url.minSignificantBmrs}
       highlightLikelyPassengers={url.highlightLikelyPassengers}
       onOpenChange={(settings) => setUrl({ settings }, { replace: !settings })}
       onModeChange={(mode) => setUrl({ mode, pair: undefined })}
       onQThresholdChange={(qThreshold) => setUrl({ qThreshold, pair: undefined })}
+      onMinIdentifiedBmrsChange={(minIdentifiedBmrs) =>
+        setUrl({ minIdentifiedBmrs, pair: undefined })
+      }
+      onMinSignificantBmrsChange={(minSignificantBmrs) =>
+        setUrl({ minSignificantBmrs, pair: undefined })
+      }
       onHighlightLikelyPassengersChange={(highlightLikelyPassengers) =>
         setUrl({ highlightLikelyPassengers })
       }
@@ -168,6 +188,8 @@ export function App() {
                   mode={url.mode}
                   display={url.exploreDisplay}
                   qThreshold={url.qThreshold}
+                  minIdentifiedBmrs={url.minIdentifiedBmrs}
+                  minSignificantBmrs={url.minSignificantBmrs}
                   significantOnly={url.significantOnly}
                   onDisplayChange={(exploreDisplay) => setUrl({ exploreDisplay })}
                   onSignificantOnlyChange={(significantOnly) =>
@@ -198,6 +220,8 @@ export function App() {
                   result={selectedResult}
                   mode={url.view === "compare" ? "consensus" : url.mode}
                   qThreshold={url.qThreshold}
+                  minIdentifiedBmrs={url.minIdentifiedBmrs}
+                  minSignificantBmrs={url.minSignificantBmrs}
                   likelyPassengers={likelyPassengers}
                   highlightLikelyPassengers={url.highlightLikelyPassengers}
                   open={selectedResult != null}

@@ -38,6 +38,8 @@ describe("InteractionList", () => {
         results={results}
         mode="cbase"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         likelyPassengers={new Set()}
         highlightLikelyPassengers={false}
         onSelect={() => undefined}

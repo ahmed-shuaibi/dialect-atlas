@@ -80,7 +80,7 @@ export const ATLAS_MODES: ReadonlyArray<{
   {
     value: "consensus",
     label: "Consensus",
-    detail: "Same direction across all three.",
+    detail: "Agreement across independent backgrounds.",
   },
   ...Object.values(BMR_METHODS).map((method) => ({
     value: method.id as Bmr,

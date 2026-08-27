@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import { InteractionLane } from "@/features/atlas/components/InteractionLane";
-import type { AtlasMode, InteractionResult } from "@/features/atlas/types";
+import type { AtlasMode, BmrCount, InteractionResult } from "@/features/atlas/types";
 
 export function InteractionList({
   results,
   mode,
   qThreshold,
+  minIdentifiedBmrs,
+  minSignificantBmrs,
   likelyPassengers,
   highlightLikelyPassengers,
   onSelect,
@@ -13,6 +15,8 @@ export function InteractionList({
   results: InteractionResult[];
   mode: AtlasMode;
   qThreshold: number;
+  minIdentifiedBmrs: BmrCount;
+  minSignificantBmrs: BmrCount;
   likelyPassengers: ReadonlySet<string>;
   highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
@@ -39,6 +43,8 @@ export function InteractionList({
           results={me}
           mode={mode}
           qThreshold={qThreshold}
+          minIdentifiedBmrs={minIdentifiedBmrs}
+          minSignificantBmrs={minSignificantBmrs}
           likelyPassengers={likelyPassengers}
           highlightLikelyPassengers={highlightLikelyPassengers}
           onSelect={onSelect}
@@ -48,6 +54,8 @@ export function InteractionList({
           results={co}
           mode={mode}
           qThreshold={qThreshold}
+          minIdentifiedBmrs={minIdentifiedBmrs}
+          minSignificantBmrs={minSignificantBmrs}
           likelyPassengers={likelyPassengers}
           highlightLikelyPassengers={highlightLikelyPassengers}
           onSelect={onSelect}

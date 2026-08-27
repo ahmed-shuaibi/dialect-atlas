@@ -3,11 +3,18 @@ import type {
   AtlasMode,
   AtlasUrlState,
   AtlasView,
+  BmrCount,
   Direction,
   ExploreDisplay,
   QThreshold,
 } from "@/features/atlas/types";
-import { DEFAULT_Q_THRESHOLD, Q_THRESHOLDS } from "@/features/atlas/types";
+import {
+  BMR_COUNT_THRESHOLDS,
+  DEFAULT_MIN_IDENTIFIED_BMRS,
+  DEFAULT_MIN_SIGNIFICANT_BMRS,
+  DEFAULT_Q_THRESHOLD,
+  Q_THRESHOLDS,
+} from "@/features/atlas/types";
 
 export const URL_DEFAULTS: AtlasUrlState = {
   view: "explore",
@@ -15,6 +22,8 @@ export const URL_DEFAULTS: AtlasUrlState = {
   settings: false,
   exploreDisplay: "list",
   qThreshold: DEFAULT_Q_THRESHOLD,
+  minIdentifiedBmrs: DEFAULT_MIN_IDENTIFIED_BMRS,
+  minSignificantBmrs: DEFAULT_MIN_SIGNIFICANT_BMRS,
   significantOnly: false,
   compareDirection: "ME",
   highlightLikelyPassengers: false,
@@ -31,6 +40,10 @@ const isDirection = (value: string | null): value is Direction =>
 const parseQThreshold = (value: string | null): QThreshold => {
   const parsed = Number(value);
   return Q_THRESHOLDS.find((threshold) => threshold === parsed) ?? DEFAULT_Q_THRESHOLD;
+};
+const parseBmrCount = (value: string | null, fallback: BmrCount): BmrCount => {
+  const parsed = Number(value);
+  return BMR_COUNT_THRESHOLDS.find((count) => count === parsed) ?? fallback;
 };
 
 export function parseAtlasHash(hash: string): AtlasUrlState {
@@ -50,6 +63,14 @@ export function parseAtlasHash(hash: string): AtlasUrlState {
       ? exploreDisplay
       : URL_DEFAULTS.exploreDisplay,
     qThreshold: parseQThreshold(params.get("q")),
+    minIdentifiedBmrs: parseBmrCount(
+      params.get("identify"),
+      DEFAULT_MIN_IDENTIFIED_BMRS,
+    ),
+    minSignificantBmrs: parseBmrCount(
+      params.get("sigbmrs"),
+      DEFAULT_MIN_SIGNIFICANT_BMRS,
+    ),
     significantOnly: params.get("significant") === "1",
     compareDirection: isDirection(params.get("direction"))
       ? params.get("direction") as Direction
@@ -67,6 +88,12 @@ export function serializeAtlasHash(state: AtlasUrlState): string {
   if (state.settings) params.set("settings", "1");
   params.set("display", state.exploreDisplay);
   if (state.qThreshold !== DEFAULT_Q_THRESHOLD) params.set("q", String(state.qThreshold));
+  if (state.minIdentifiedBmrs !== DEFAULT_MIN_IDENTIFIED_BMRS) {
+    params.set("identify", String(state.minIdentifiedBmrs));
+  }
+  if (state.minSignificantBmrs !== DEFAULT_MIN_SIGNIFICANT_BMRS) {
+    params.set("sigbmrs", String(state.minSignificantBmrs));
+  }
   if (state.significantOnly) params.set("significant", "1");
   if (state.compareDirection !== URL_DEFAULTS.compareDirection) {
     params.set("direction", state.compareDirection);

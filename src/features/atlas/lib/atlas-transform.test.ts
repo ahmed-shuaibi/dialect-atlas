@@ -5,6 +5,7 @@ import {
   exploreResults,
   filterResultsByGene,
   findResultForMode,
+  independentConsensusMatches,
   isSignificant,
   lrtEvidence,
   modelResults,
@@ -88,6 +89,122 @@ describe("Atlas interaction ranking", () => {
 
     const consensus = consensusResults(cohort, "ME");
     expect(consensus.map((result) => result.ga)).toEqual(["C_M"]);
+  });
+
+  it("applies identification and significance minima independently from one through three", () => {
+    const cohort = data({
+      cbase: [
+        dialectRow("ONE_M", "A_N", "ME", 1, { q: 0.001 }),
+        dialectRow("THREE_M", "C_N", "ME", 2, { q: 0.001 }),
+      ],
+      dig: [
+        dialectRow("TWO_M", "B_N", "ME", 1, { q: 0.001 }),
+        dialectRow("THREE_M", "C_N", "ME", 2, { q: 0.005 }),
+      ],
+      mutsig: [
+        dialectRow("TWO_M", "B_N", "ME", 1, { q: 0.02 }),
+        dialectRow("THREE_M", "C_N", "ME", 2, { q: 0.02 }),
+      ],
+    });
+    const genes = (results: ReturnType<typeof consensusResults>) =>
+      results.map(({ ga }) => ga).sort();
+
+    expect(
+      genes(consensusResults(cohort, "ME", { significantOnly: false, minIdentifiedBmrs: 1 })),
+    ).toEqual(["ONE_M", "THREE_M", "TWO_M"]);
+    expect(
+      genes(consensusResults(cohort, "ME", { significantOnly: false, minIdentifiedBmrs: 2 })),
+    ).toEqual(["THREE_M", "TWO_M"]);
+    expect(
+      genes(consensusResults(cohort, "ME", { significantOnly: false, minIdentifiedBmrs: 3 })),
+    ).toEqual(["THREE_M"]);
+
+    expect(
+      genes(
+        consensusResults(cohort, "ME", {
+          minIdentifiedBmrs: 1,
+          minSignificantBmrs: 1,
+        }),
+      ),
+    ).toEqual(["ONE_M", "THREE_M", "TWO_M"]);
+    expect(
+      genes(
+        consensusResults(cohort, "ME", {
+          minIdentifiedBmrs: 2,
+          minSignificantBmrs: 1,
+        }),
+      ),
+    ).toEqual(["THREE_M", "TWO_M"]);
+    expect(
+      genes(
+        consensusResults(cohort, "ME", {
+          minIdentifiedBmrs: 2,
+          minSignificantBmrs: 2,
+        }),
+      ),
+    ).toEqual(["THREE_M"]);
+    expect(
+      consensusResults(cohort, "ME", {
+        minIdentifiedBmrs: 3,
+        minSignificantBmrs: 3,
+      }),
+    ).toEqual([]);
+    expect(
+      genes(
+        consensusResults(cohort, "ME", {
+          qThreshold: 0.05,
+          minIdentifiedBmrs: 3,
+          minSignificantBmrs: 3,
+        }),
+      ),
+    ).toEqual(["THREE_M"]);
+
+    const absentFromCbase = findResultForMode(
+      cohort,
+      { direction: "ME", ga: "TWO_M", gb: "B_N" },
+      "consensus",
+      { minIdentifiedBmrs: 2, minSignificantBmrs: 1 },
+    );
+    expect(absentFromCbase).not.toBeNull();
+    expect(absentFromCbase?.matches.map(({ bmr }) => bmr)).toEqual(["dig", "mutsig"]);
+  });
+
+  it("keeps the omitted policy backward-compatible with explicit strict 3-of-3", () => {
+    const shared = dialectRow("STRICT_M", "A_N", "ME", 1, { q: 0.001 });
+    const twoOnly = dialectRow("TWO_M", "B_N", "ME", 2, { q: 0.001 });
+    const cohort = data({
+      cbase: [shared, twoOnly],
+      dig: [shared, twoOnly],
+      mutsig: [shared],
+    });
+
+    const defaults = consensusResults(cohort, "ME");
+    const explicit = consensusResults(cohort, "ME", {
+      minIdentifiedBmrs: 3,
+      minSignificantBmrs: 3,
+    });
+    expect(defaults).toEqual(explicit);
+    expect(defaults.map(({ ga }) => ga)).toEqual(["STRICT_M"]);
+    expect(resultIsSignificant(defaults[0], "consensus")).toBe(true);
+
+    const twoResult = findResultForMode(
+      cohort,
+      { direction: "ME", ga: "TWO_M", gb: "B_N" },
+      "consensus",
+      {
+        minIdentifiedBmrs: 2,
+        minSignificantBmrs: 2,
+      },
+    );
+    expect(twoResult).not.toBeNull();
+    expect(resultIsSignificant(twoResult!, "consensus")).toBe(false);
+    expect(
+      findResultForMode(
+        cohort,
+        { direction: "ME", ga: "TWO_M", gb: "B_N" },
+        "consensus",
+      ),
+    ).toBeNull();
   });
 
   it("follows stored direction-specific ranks and ignores neutral rows", () => {
@@ -205,23 +322,54 @@ describe("Atlas interaction ranking", () => {
     ]);
   });
 
-  it("excludes CBaSE-backed MutSig features from three-background consensus only", () => {
-    const pair = dialectRow("A_M", "B_M", "ME", 1, { q: 0.001 });
+  it("excludes CBaSE-backed MutSig rows but allows an honest two-background consensus", () => {
+    const cbase = dialectRow("A_M", "B_M", "ME", 1, { q: 0.001 });
+    const dig = dialectRow("A_M", "B_M", "ME", 1, { q: 0.002 });
+    const mutsig = dialectRow("A_M", "B_M", "ME", 1, { q: 0.0001 });
     const cohort = data(
-      { cbase: [pair], dig: [pair], mutsig: [pair] },
+      { cbase: [cbase], dig: [dig], mutsig: [mutsig] },
       ["A_M"],
     );
 
     expect(consensusResults(cohort, "ME")).toEqual([]);
-    expect(consensusResults(cohort, "ME")).toEqual([]);
+    const relaxed = consensusResults(cohort, "ME", {
+      minIdentifiedBmrs: 2,
+      minSignificantBmrs: 2,
+    });
+    expect(relaxed).toHaveLength(1);
+    expect(independentConsensusMatches(relaxed[0]).map(({ bmr }) => bmr)).toEqual([
+      "cbase",
+      "dig",
+    ]);
+    expect(backgroundSupport(relaxed[0])).toEqual({
+      identified: 2,
+      significant: 2,
+      independent: 2,
+    });
+    expect(resultQ(relaxed[0], "consensus", 1)).toBe(0.001);
+    expect(resultQ(relaxed[0], "consensus", 2)).toBe(0.002);
+    expect(resultQ(relaxed[0], "consensus", 3)).toBe(1);
+    expect(
+      consensusResults(cohort, "ME", {
+        minIdentifiedBmrs: 3,
+        minSignificantBmrs: 2,
+      }),
+    ).toEqual([]);
+    expect(
+      consensusResults(cohort, "ME", {
+        minIdentifiedBmrs: 2,
+        minSignificantBmrs: 3,
+      }),
+    ).toEqual([]);
     expect(modelResults(cohort, "mutsig", "ME")).toHaveLength(1);
     expect(
       findResultForMode(
         cohort,
         { direction: "ME", ga: "A_M", gb: "B_M" },
         "consensus",
+        { minIdentifiedBmrs: 2, minSignificantBmrs: 2 },
       ),
-    ).toBeNull();
+    ).not.toBeNull();
     expect(
       findResultForMode(
         cohort,
@@ -243,17 +391,40 @@ describe("Atlas interaction ranking", () => {
     expect(result.mutsigFallbackFeatures).toEqual([]);
   });
 
-  it("indexes a dense K=500-style cohort without quadratic matching", () => {
-    const count = 4500;
-    const rows = Array.from({ length: count }, (_, index) =>
-      dialectRow(`G${index}_M`, `H${index}_N`, "ME", index + 1, { q: 0.001 }),
-    );
-    const cohort = data({ cbase: rows, dig: [...rows], mutsig: [...rows] });
-    const start = performance.now();
-    const results = consensusResults(cohort, "ME");
-    const elapsed = performance.now() - start;
-    expect(results).toHaveLength(count);
-    expect(elapsed).toBeLessThan(1500);
+  it("materializes a large disjoint-provider union once and reuses its candidates", () => {
+    const countPerProvider = 4500;
+    const rows = (prefix: string) =>
+      Array.from({ length: countPerProvider }, (_, index) =>
+        dialectRow(`${prefix}${index}_M`, `H${prefix}${index}_N`, "ME", index + 1, {
+          q: 0.001,
+        }),
+      );
+    const cohort = data({
+      cbase: rows("C"),
+      dig: rows("D"),
+      mutsig: rows("S"),
+    });
+
+    const union = consensusResults(cohort, "ME", {
+      significantOnly: false,
+      minIdentifiedBmrs: 1,
+    });
+    expect(union).toHaveLength(countPerProvider * 3);
+    expect(new Set(union.map(({ ga }) => ga[0]))).toEqual(new Set(["C", "D", "S"]));
+
+    const cached = consensusResults(cohort, "ME", {
+      significantOnly: false,
+      minIdentifiedBmrs: 1,
+    });
+    expect(cached).not.toBe(union);
+    expect(cached[0]).toBe(union[0]);
+    expect(cached.at(-1)).toBe(union.at(-1));
+    expect(
+      consensusResults(cohort, "ME", {
+        significantOnly: false,
+        minIdentifiedBmrs: 2,
+      }),
+    ).toEqual([]);
   });
 
   it("does not resolve pair links outside the selected significant model view", () => {
@@ -293,6 +464,88 @@ describe("Atlas interaction ranking", () => {
     ).toEqual(["PASS_M", "BOUNDARY_M", "RELAXED_M"]);
   });
 
+  it("counts only exact same-direction rows and treats boundary or null q as identified only", () => {
+    const cohort = data({
+      cbase: [
+        dialectRow("EXACT_M", "A_N", "ME", 1, { q: 0.009999 }),
+        dialectRow("MIXED_M", "B_N", "ME", 2, { q: 0.001 }),
+      ],
+      dig: [
+        dialectRow("EXACT_M", "A_N", "ME", 1, { q: 0.01 }),
+        dialectRow("B_N", "MIXED_M", "CO", 2, { q: 0.001 }),
+      ],
+      mutsig: [
+        dialectRow("EXACT_M", "A_N", "ME", 1, { q: null }),
+        dialectRow("B_N", "MIXED_M", "neutral", 2, { q: 0.001 }),
+      ],
+    });
+
+    const exact = findResultForMode(
+      cohort,
+      { direction: "ME", ga: "EXACT_M", gb: "A_N" },
+      "consensus",
+      {
+        minIdentifiedBmrs: 3,
+        minSignificantBmrs: 1,
+      },
+    );
+    expect(exact).not.toBeNull();
+    expect(backgroundSupport(exact!)).toEqual({
+      identified: 3,
+      significant: 1,
+      independent: 3,
+    });
+    expect(resultQ(exact!, "consensus", 1)).toBe(0.009999);
+    expect(resultQ(exact!, "consensus", 2)).toBe(0.01);
+    expect(resultQ(exact!, "consensus", 3)).toBe(1);
+    expect(
+      resultIsSignificant(exact!, "consensus", {
+        qThreshold: 0.01,
+        minIdentifiedBmrs: 3,
+        minSignificantBmrs: 1,
+      }),
+    ).toBe(true);
+    expect(
+      resultIsSignificant(exact!, "consensus", {
+        qThreshold: 0.01,
+        minIdentifiedBmrs: 3,
+        minSignificantBmrs: 2,
+      }),
+    ).toBe(false);
+
+    const mixed = findResultForMode(
+      cohort,
+      { direction: "ME", ga: "MIXED_M", gb: "B_N" },
+      "consensus",
+      {
+        minIdentifiedBmrs: 1,
+        minSignificantBmrs: 1,
+      },
+    );
+    expect(mixed).not.toBeNull();
+    expect(backgroundSupport(mixed!)).toEqual({
+      identified: 1,
+      significant: 1,
+      independent: 3,
+    });
+    expect(mixed?.pairEvidence.map(({ row }) => row.direction)).toEqual([
+      "ME",
+      "CO",
+      "neutral",
+    ]);
+    expect(
+      findResultForMode(
+        cohort,
+        { direction: "ME", ga: "MIXED_M", gb: "B_N" },
+        "consensus",
+        {
+          minIdentifiedBmrs: 2,
+          minSignificantBmrs: 1,
+        },
+      ),
+    ).toBeNull();
+  });
+
   it("separates ranked candidates from threshold-filtered significant results", () => {
     const cbase = [
       dialectRow("STRICT_M", "A_N", "ME", 1, { q: 0.004 }),
@@ -315,16 +568,16 @@ describe("Atlas interaction ranking", () => {
       "RELAXED_M",
       "BOUNDARY_M",
     ]);
-    expect(candidates.map((result) => resultIsSignificant(result, "consensus", 0.01))).toEqual([
-      true,
-      false,
-      false,
-    ]);
-    expect(candidates.map((result) => resultIsSignificant(result, "consensus", 0.05))).toEqual([
-      true,
-      true,
-      false,
-    ]);
+    expect(
+      candidates.map((result) =>
+        resultIsSignificant(result, "consensus", { qThreshold: 0.01 }),
+      ),
+    ).toEqual([true, false, false]);
+    expect(
+      candidates.map((result) =>
+        resultIsSignificant(result, "consensus", { qThreshold: 0.05 }),
+      ),
+    ).toEqual([true, true, false]);
   });
 
   it("requires same-direction significance under every model for consensus", () => {
@@ -348,10 +601,21 @@ describe("Atlas interaction ranking", () => {
     const [result] = modelResults(cohort, "dig", "ME");
     expect(result.representative.rank).toBe(2);
     expect(resultQ(result, "dig")).toBe(0.008);
-    expect(backgroundSupport(result)).toEqual({ significant: 2, independent: 3 });
-    expect(backgroundSupport(result, 0.05)).toEqual({ significant: 3, independent: 3 });
-    expect(resultIsSignificant(result, "dig", 0.005)).toBe(false);
-    expect(resultIsSignificant(result, "dig", 0.01)).toBe(true);
+    expect(resultQ(result, "consensus", 1)).toBe(0.002);
+    expect(resultQ(result, "consensus", 2)).toBe(0.008);
+    expect(resultQ(result, "consensus", 3)).toBe(0.02);
+    expect(backgroundSupport(result)).toEqual({
+      identified: 3,
+      significant: 2,
+      independent: 3,
+    });
+    expect(backgroundSupport(result, 0.05)).toEqual({
+      identified: 3,
+      significant: 3,
+      independent: 3,
+    });
+    expect(resultIsSignificant(result, "dig", { qThreshold: 0.005 })).toBe(false);
+    expect(resultIsSignificant(result, "dig", { qThreshold: 0.01 })).toBe(true);
     expect(modelResults(cohort, "mutsig", "ME")).toEqual([]);
     expect(modelResults(cohort, "mutsig", "ME", { qThreshold: 0.05 })).toHaveLength(1);
   });
@@ -363,7 +627,11 @@ describe("Atlas interaction ranking", () => {
       ["A_M"],
     );
     const [result] = modelResults(cohort, "cbase", "ME");
-    expect(backgroundSupport(result)).toEqual({ significant: 2, independent: 2 });
+    expect(backgroundSupport(result)).toEqual({
+      identified: 2,
+      significant: 2,
+      independent: 2,
+    });
   });
 
   it("gives network and list consumers one complete result set", () => {

@@ -9,6 +9,7 @@ import { resultsForNetwork } from "@/features/atlas/components/explore-display";
 import { exploreResults, filterResultsByGene } from "@/features/atlas/lib/atlas-transform";
 import type {
   AtlasMode,
+  BmrCount,
   CohortData,
   ExploreDisplay,
   InteractionResult,
@@ -26,12 +27,14 @@ const DISPLAY_OPTIONS = [
 
 function EmptyExplore({
   query,
+  mode,
   qThreshold,
   significantOnly,
   onClearQuery,
   onShowRanked,
 }: {
   query: string;
+  mode: AtlasMode;
   qThreshold: number;
   significantOnly: boolean;
   onClearQuery: () => void;
@@ -41,7 +44,13 @@ function EmptyExplore({
   return (
     <div className="surface-card py-20 text-center">
       <p className="text-xl font-semibold">
-        {searched ? "No pairs match that gene." : `No pairs meet q < ${qThreshold}.`}
+        {searched
+          ? "No pairs match that gene."
+          : mode === "consensus"
+            ? "No pairs meet these consensus settings."
+            : significantOnly
+              ? `No pairs meet q < ${qThreshold}.`
+              : "No pairs in this background."}
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-2">
         {searched && (
@@ -64,6 +73,8 @@ export function ExploreView({
   mode,
   display,
   qThreshold,
+  minIdentifiedBmrs,
+  minSignificantBmrs,
   significantOnly,
   onDisplayChange,
   onSignificantOnlyChange,
@@ -76,6 +87,8 @@ export function ExploreView({
   mode: AtlasMode;
   display: ExploreDisplay;
   qThreshold: number;
+  minIdentifiedBmrs: BmrCount;
+  minSignificantBmrs: BmrCount;
   significantOnly: boolean;
   onDisplayChange: (display: ExploreDisplay) => void;
   onSignificantOnlyChange: (significantOnly: boolean) => void;
@@ -87,8 +100,20 @@ export function ExploreView({
   const [query, setQuery] = useState("");
   useEffect(() => setQuery(""), [data.id]);
   const results = useMemo(
-    () => exploreResults(data, mode, { qThreshold, significantOnly }),
-    [data, mode, qThreshold, significantOnly],
+    () => exploreResults(data, mode, {
+      qThreshold,
+      minIdentifiedBmrs,
+      minSignificantBmrs,
+      significantOnly,
+    }),
+    [
+      data,
+      minIdentifiedBmrs,
+      minSignificantBmrs,
+      mode,
+      qThreshold,
+      significantOnly,
+    ],
   );
   const visibleResults = useMemo(
     () => filterResultsByGene(results, query),
@@ -138,6 +163,7 @@ export function ExploreView({
       {visibleResults.length === 0 ? (
         <EmptyExplore
           query={query}
+          mode={mode}
           qThreshold={qThreshold}
           significantOnly={significantOnly}
           onClearQuery={() => setQuery("")}
@@ -160,6 +186,8 @@ export function ExploreView({
               totalResults={visibleResults.length}
               mode={mode}
               qThreshold={qThreshold}
+              minIdentifiedBmrs={minIdentifiedBmrs}
+              minSignificantBmrs={minSignificantBmrs}
               likelyPassengers={likelyPassengers}
               highlightLikelyPassengers={highlightLikelyPassengers}
               onSelect={onSelect}
@@ -172,6 +200,8 @@ export function ExploreView({
             results={visibleResults}
             mode={mode}
             qThreshold={qThreshold}
+            minIdentifiedBmrs={minIdentifiedBmrs}
+            minSignificantBmrs={minSignificantBmrs}
             likelyPassengers={likelyPassengers}
             highlightLikelyPassengers={highlightLikelyPassengers}
             onSelect={onSelect}

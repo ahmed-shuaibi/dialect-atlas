@@ -61,6 +61,8 @@ function dialogFor(data: CohortData, qThreshold = 0.01) {
       highlightLikelyPassengers={false}
       mode="cbase"
       qThreshold={qThreshold}
+      minIdentifiedBmrs={3}
+      minSignificantBmrs={3}
       open
       onOpenChange={() => undefined}
     />,
@@ -153,6 +155,8 @@ describe("PairDialog model evidence", () => {
         highlightLikelyPassengers={false}
         mode="dig"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         open
         onOpenChange={() => undefined}
       />,
@@ -173,13 +177,19 @@ describe("PairDialog model evidence", () => {
         highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         open
         onOpenChange={() => undefined}
       />,
     );
 
-    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
-    expect(screen.getByText("3 of 3 meet q < 0.01.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Significant · 3/3 identified · 3/3 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥3 identified and ≥3 significant at q < 0.01."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Technical details")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
@@ -195,13 +205,19 @@ describe("PairDialog model evidence", () => {
         highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         open
         onOpenChange={() => undefined}
       />,
     );
 
-    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
-    expect(screen.getByText("0 of 3 meet q < 0.01.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Not significant · 3/3 identified · 0/3 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥3 identified and ≥3 significant at q < 0.01."),
+    ).toBeInTheDocument();
 
     view.rerender(
       <PairDialog
@@ -210,13 +226,19 @@ describe("PairDialog model evidence", () => {
         highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.05}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         open
         onOpenChange={() => undefined}
       />,
     );
 
-    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
-    expect(screen.getByText("3 of 3 meet q < 0.05.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Significant · 3/3 identified · 3/3 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥3 identified and ≥3 significant at q < 0.05."),
+    ).toBeInTheDocument();
   });
 
   it("explains why a significant MutSig fallback row is not all-three support", () => {
@@ -234,15 +256,51 @@ describe("PairDialog model evidence", () => {
         highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         open
         onOpenChange={() => undefined}
       />,
     );
 
-    expect(screen.getByText("2 of 2 backgrounds agree")).toBeInTheDocument();
-    expect(screen.getByText("2 of 2 meet q < 0.01.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Not significant · 2/2 identified · 2/2 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥3 identified and ≥3 significant at q < 0.01."),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("MutSigCV2 uses CBaSE fallback for A_M."),
+    ).toBeInTheDocument();
+  });
+
+  it("allows independent evidence to satisfy relaxed consensus minima", () => {
+    const shared = row("A_M", "B_N", "ME", 1, { q: 0.001 });
+    const data = cohort(
+      { cbase: [shared], dig: [shared], mutsig: [shared] },
+      ["A_M"],
+    );
+    const [result] = modelResults(data, "cbase", "ME");
+
+    render(
+      <PairDialog
+        result={result}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
+        mode="consensus"
+        qThreshold={0.01}
+        minIdentifiedBmrs={2}
+        minSignificantBmrs={2}
+        open
+        onOpenChange={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByText("Significant · 2/2 identified · 2/2 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥2 identified and ≥2 significant at q < 0.01."),
     ).toBeInTheDocument();
   });
 });

@@ -225,7 +225,7 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
             CBaSE is primary. DIG and MutSigCV2 test sensitivity to the background model.
           </p>
           <p className="mt-1 text-lg leading-8 text-muted">
-            Consensus keeps exact pairs with the same direction under all three.
+            Consensus defaults to exact pairs with the same direction under all three.
           </p>
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-3">

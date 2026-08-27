@@ -1,4 +1,8 @@
-import { fmtStat, lrtEvidence } from "@/features/atlas/lib/atlas-transform";
+import {
+  fmtStat,
+  independentConsensusMatches,
+  lrtEvidence,
+} from "@/features/atlas/lib/atlas-transform";
 import type { AtlasMode, InteractionResult } from "@/features/atlas/types";
 
 export const NETWORK_PER_DIRECTION_LIMIT = 10;
@@ -14,7 +18,7 @@ export function resultEffect(result: InteractionResult, mode: AtlasMode): number
     return result.direction === "ME" ? row.rho : lrtEvidence(row);
   }
   return median(
-    result.matches.map(({ row }) =>
+    independentConsensusMatches(result).map(({ row }) =>
       result.direction === "ME" ? row.rho : lrtEvidence(row),
     ),
   );

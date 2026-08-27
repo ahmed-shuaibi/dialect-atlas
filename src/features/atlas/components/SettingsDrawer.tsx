@@ -6,31 +6,87 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { ATLAS_MODES } from "@/features/atlas/lib/atlas-metadata";
-import { Q_THRESHOLDS, type AtlasMode, type QThreshold } from "@/features/atlas/types";
+import {
+  BMR_COUNT_THRESHOLDS,
+  Q_THRESHOLDS,
+  type AtlasMode,
+  type BmrCount,
+  type QThreshold,
+} from "@/features/atlas/types";
 import { cn } from "@/lib/utils";
+
+type BmrCountOption = `${BmrCount}`;
+const BMR_COUNT_OPTIONS = BMR_COUNT_THRESHOLDS.map((count) => {
+  const value = String(count) as BmrCountOption;
+  return { value, label: value };
+});
+
+function BmrMinimumControl({
+  label,
+  ariaLabel,
+  value,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: BmrCount;
+  onChange: (value: BmrCount) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-2 rounded-[18px] border border-line bg-paper px-4 py-3",
+        "sm:flex-row sm:items-center sm:justify-between",
+      )}
+    >
+      <span className="text-[15px] font-semibold">{label}</span>
+      <div className="flex items-center gap-2">
+        <SegmentedControl
+          value={String(value) as BmrCountOption}
+          options={BMR_COUNT_OPTIONS}
+          onChange={(next) => onChange(Number(next) as BmrCount)}
+          label={ariaLabel}
+          className="shadow-none"
+        />
+        <span className="font-mono text-xs text-muted">of 3</span>
+      </div>
+    </div>
+  );
+}
 
 export type SettingsDrawerProps = {
   open: boolean;
   showBackground?: boolean;
+  showConsensusThresholds?: boolean;
   mode: AtlasMode;
   qThreshold: QThreshold;
+  minIdentifiedBmrs: BmrCount;
+  minSignificantBmrs: BmrCount;
   highlightLikelyPassengers: boolean;
   onOpenChange: (open: boolean) => void;
   onModeChange: (mode: AtlasMode) => void;
   onQThresholdChange: (threshold: QThreshold) => void;
+  onMinIdentifiedBmrsChange: (minimum: BmrCount) => void;
+  onMinSignificantBmrsChange: (minimum: BmrCount) => void;
   onHighlightLikelyPassengersChange: (highlight: boolean) => void;
 };
 
 export function SettingsDrawer({
   open,
   showBackground = true,
+  showConsensusThresholds = false,
   mode,
   qThreshold,
+  minIdentifiedBmrs,
+  minSignificantBmrs,
   highlightLikelyPassengers,
   onOpenChange,
   onModeChange,
   onQThresholdChange,
+  onMinIdentifiedBmrsChange,
+  onMinSignificantBmrsChange,
   onHighlightLikelyPassengersChange,
 }: SettingsDrawerProps) {
   return (
@@ -106,6 +162,26 @@ export function SettingsDrawer({
             ))}
           </div>
         </fieldset>
+
+        {showConsensusThresholds && (
+          <fieldset className="mt-7">
+            <legend className="text-sm font-semibold">Consensus thresholds</legend>
+            <div className="mt-3 space-y-2">
+              <BmrMinimumControl
+                label="BMRs identifying"
+                ariaLabel="Minimum BMRs identifying this interaction"
+                value={minIdentifiedBmrs}
+                onChange={onMinIdentifiedBmrsChange}
+              />
+              <BmrMinimumControl
+                label="BMRs significant"
+                ariaLabel="Minimum BMRs significant at the q cutoff"
+                value={minSignificantBmrs}
+                onChange={onMinSignificantBmrsChange}
+              />
+            </div>
+          </fieldset>
+        )}
 
         <fieldset className="mt-7">
           <legend className="text-sm font-semibold">Annotations</legend>

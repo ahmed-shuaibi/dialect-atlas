@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -58,10 +58,17 @@ const modelRow = (direction: "ME" | "CO", rank: number) => [
   1,
 ];
 
-const pairModelRow = (ga: string, gb: string, direction: "ME" | "CO", rank: number) => {
+const pairModelRow = (
+  ga: string,
+  gb: string,
+  direction: "ME" | "CO",
+  rank: number,
+  q = 0.004,
+) => {
   const row = modelRow(direction, rank);
   row[0] = ga;
   row[1] = gb;
+  row[17] = q;
   return row;
 };
 
@@ -137,8 +144,11 @@ const cohort = {
         bmr === "cbase"
           ? [pairModelRow("BRAF_M", "NRAS_M", "ME", 2)]
           : bmr === "dig"
-            ? [pairModelRow("CDKN2A_M", "RB1_M", "ME", 2)]
-            : [];
+            ? [
+                pairModelRow("CDKN2A_M", "RB1_M", "ME", 2),
+                pairModelRow("KEAP1_M", "NFE2L2_M", "ME", 3),
+              ]
+            : [pairModelRow("KEAP1_M", "NFE2L2_M", "ME", 2, 0.02)];
       return [bmr, { fields, rows: [modelRow("ME", 1), modelRow("CO", 1), ...modelOnlyRows] }];
     }),
   ),
@@ -268,8 +278,12 @@ describe("Atlas v2 critical flow", () => {
     expect(pair).not.toBeNull();
     await user.click(pair!);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
-    expect(screen.getByText("3 of 3 meet q < 0.01.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Significant · 3/3 identified · 3/3 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥3 identified and ≥3 significant at q < 0.01."),
+    ).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=ME%3A%3AKRAS_M%3A%3ATP53_M");
   });
 
@@ -294,6 +308,129 @@ describe("Atlas v2 critical flow", () => {
     });
     expect(network).toHaveTextContent("1 ME + 1 CO");
     expect(window.location.hash).toContain("display=network");
+  });
+
+  it("applies independent consensus minima across ranked, significant, list, and network views", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
+    );
+    const user = userEvent.setup();
+    const { container } = renderApp();
+
+    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
+    expect(screen.queryByText("KEAP1_M")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
+    const identifiedGroup = screen.getByRole("radiogroup", {
+      name: "Minimum BMRs identifying this interaction",
+    });
+    const significantGroup = screen.getByRole("radiogroup", {
+      name: "Minimum BMRs significant at the q cutoff",
+    });
+    expect(within(identifiedGroup).getByRole("radio", { name: "3" })).toBeChecked();
+    expect(within(significantGroup).getByRole("radio", { name: "3" })).toBeChecked();
+
+    await user.click(within(identifiedGroup).getByRole("radio", { name: "2" }));
+    await user.click(within(significantGroup).getByRole("radio", { name: "1" }));
+    expect(within(identifiedGroup).getByRole("radio", { name: "2" })).toBeChecked();
+    expect(within(significantGroup).getByRole("radio", { name: "1" })).toBeChecked();
+    expect(window.location.hash).toContain("identify=2");
+    expect(window.location.hash).toContain("sigbmrs=1");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText("KEAP1_M")).toBeInTheDocument();
+    expect(screen.getByText("NFE2L2_M")).toBeInTheDocument();
+    expect(screen.queryByText("BRAF_M")).not.toBeInTheDocument();
+    const relaxedListIds = resultIds(container);
+    expect(relaxedListIds).toEqual([
+      "CO::EGFR_M::PIK3CA_M",
+      "ME::KEAP1_M::NFE2L2_M",
+      "ME::KRAS_M::TP53_M",
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Significant only" }));
+    await waitFor(() => expect(window.location.hash).toContain("significant=1"));
+    expect(screen.getByText("KEAP1_M")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Network" }));
+    expect(await screen.findByRole("region", { name: "Interaction network" })).toHaveTextContent(
+      "2 ME + 1 CO",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
+    const persistedIdentifiedGroup = screen.getByRole("radiogroup", {
+      name: "Minimum BMRs identifying this interaction",
+    });
+    const persistedSignificantGroup = screen.getByRole("radiogroup", {
+      name: "Minimum BMRs significant at the q cutoff",
+    });
+    expect(within(persistedIdentifiedGroup).getByRole("radio", { name: "2" })).toBeChecked();
+    expect(within(persistedSignificantGroup).getByRole("radio", { name: "1" })).toBeChecked();
+    await user.click(within(persistedSignificantGroup).getByRole("radio", { name: "2" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("region", { name: "Interaction network" })).toHaveTextContent(
+        "1 ME + 1 CO",
+      );
+    });
+    expect(screen.queryByText("KEAP1_M")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "List" }));
+    await user.click(screen.getByRole("button", { name: "Significant only" }));
+    await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
+    const oneIdentifiedGroup = screen.getByRole("radiogroup", {
+      name: "Minimum BMRs identifying this interaction",
+    });
+    await user.click(within(oneIdentifiedGroup).getByRole("radio", { name: "1" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText("BRAF_M")).toBeInTheDocument();
+    expect(screen.getByText("CDKN2A_M")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
+    await user.click(
+      within(
+        screen.getByRole("radiogroup", {
+          name: "Minimum BMRs identifying this interaction",
+        }),
+      ).getByRole("radio", { name: "3" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByText("BRAF_M")).not.toBeInTheDocument();
+    expect(window.location.hash).not.toContain("identify=");
+  });
+
+  it("invalidates an open pair when its consensus minimum changes", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKEAP1_M%3A%3ANFE2L2_M&display=list&identify=2&sigbmrs=1",
+    );
+    renderApp();
+
+    expect(
+      await screen.findByRole("heading", { name: "KEAP1_M / NFE2L2_M" }),
+    ).toBeInTheDocument();
+    window.history.pushState(null, "", `${window.location.pathname}${window.location.hash}&settings=1`);
+    window.dispatchEvent(new Event("atlas-url-change"));
+
+    const identifiedGroup = await screen.findByRole(
+      "radiogroup",
+      { name: "Minimum BMRs identifying this interaction", hidden: true },
+    );
+    fireEvent.click(
+      within(identifiedGroup).getByRole("radio", { name: "3", hidden: true }),
+    );
+
+    await waitFor(() => {
+      expect(window.location.hash).not.toContain("pair=");
+      expect(window.location.hash).not.toContain("identify=");
+    });
+    expect(
+      screen.queryByRole("heading", { name: "KEAP1_M / NFE2L2_M" }),
+    ).not.toBeInTheDocument();
   });
 
   it("changes the background model in Customize and recomputes the ranked result set", async () => {
@@ -332,7 +469,9 @@ describe("Atlas v2 critical flow", () => {
     await user.click(screen.getByRole("button", { name: "0.001" }));
     await user.click(screen.getByRole("button", { name: "Close" }));
 
-    expect(await screen.findByText("No pairs meet q < 0.001.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No pairs meet these consensus settings."),
+    ).toBeInTheDocument();
     expect(window.location.hash).toContain("q=0.001");
     await user.click(screen.getByRole("button", { name: "Show ranked pairs" }));
     await waitFor(() => expect(window.location.hash).not.toContain("significant="));
@@ -351,8 +490,12 @@ describe("Atlas v2 critical flow", () => {
 
     const ranked = renderApp();
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
-    expect(screen.getByText("2 of 3 meet q < 0.01.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Not significant · 3/3 identified · 2/3 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥3 identified and ≥3 significant at q < 0.01."),
+    ).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=");
 
     ranked.unmount();
@@ -384,6 +527,16 @@ describe("Atlas v2 critical flow", () => {
     expect(screen.queryByRole("region", { name: "Co-occurring" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
     expect(screen.queryByRole("radio", { name: /^Consensus/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radiogroup", {
+        name: "Minimum BMRs identifying this interaction",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radiogroup", {
+        name: "Minimum BMRs significant at the q cutoff",
+      }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("q cutoff")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Close" }));
     const table = within(meSection).getByRole("table");
@@ -401,8 +554,12 @@ describe("Atlas v2 critical flow", () => {
     await user.click(within(meSection).getAllByRole("button", { name: "BRAF_M / NRAS_M" })[0]);
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("1 of 3 backgrounds agree")).toBeInTheDocument();
-    expect(screen.getByText("1 of 3 meet q < 0.01.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Not significant · 1/3 identified · 1/3 significant"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Requires ≥3 identified and ≥3 significant at q < 0.01."),
+    ).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=ME%3A%3ABRAF_M%3A%3ANRAS_M");
   });
 
@@ -420,7 +577,9 @@ describe("Atlas v2 critical flow", () => {
     const user = userEvent.setup();
     renderApp();
 
-    expect(await screen.findByText("No pairs meet q < 0.01.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No pairs meet these consensus settings."),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Show ranked pairs" }));
     await waitFor(() => expect(window.location.hash).not.toContain("significant="));
     expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();

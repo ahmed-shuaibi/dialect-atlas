@@ -41,6 +41,34 @@ function result({
   };
 }
 
+function consensusResult(qValues: readonly [number, number, number]): InteractionResult {
+  const bmrs = ["cbase", "dig", "mutsig"] as const;
+  const rows = bmrs.map((bmr, index) => {
+    const row = {
+      ga: "A_M",
+      gb: "B_N",
+      direction: "ME",
+      q: qValues[index],
+      rank: index + 1,
+      rho: -0.3,
+      lrt: 0,
+    } as DialectRow;
+    return { bmr, row, percentile: (index + 1) / 100 };
+  });
+  return {
+    id: "ME::A_M::B_N",
+    ga: "A_M",
+    gb: "B_N",
+    direction: "ME",
+    representative: rows[0].row,
+    matches: rows,
+    pairEvidence: rows.map(({ bmr, row }) => ({ bmr, row })),
+    mutsigFallbackFeatures: [],
+    worstPercentile: 0.03,
+    medianPercentile: 0.02,
+  };
+}
+
 describe("interaction network layout", () => {
   const results = [
     result({ id: "ME::A_M::B_N", ga: "A_M", gb: "B_N" }),
@@ -84,6 +112,19 @@ describe("interaction network layout", () => {
     const relaxed = buildNetworkLayout([edge], "cbase", 0.05).edges[0];
 
     expect(relaxed.width).toBeGreaterThan(strict.width);
+  });
+
+  it("encodes the kth independent q selected by the significance minimum", () => {
+    const edge = consensusResult([0.001, 0.004, 0.009]);
+    const oneOfThree = buildNetworkLayout([edge], "consensus", 0.01, 1).edges[0];
+    const twoOfThree = buildNetworkLayout([edge], "consensus", 0.01, 2).edges[0];
+    const threeOfThree = buildNetworkLayout([edge], "consensus", 0.01, 3).edges[0];
+    const defaultPolicy = buildNetworkLayout([edge], "consensus", 0.01).edges[0];
+
+    expect([oneOfThree.q, twoOfThree.q, threeOfThree.q]).toEqual([0.001, 0.004, 0.009]);
+    expect(oneOfThree.width).toBeGreaterThan(twoOfThree.width);
+    expect(twoOfThree.width).toBeGreaterThan(threeOfThree.width);
+    expect(defaultPolicy).toEqual(threeOfThree);
   });
 
   it("returns an honest empty state", () => {

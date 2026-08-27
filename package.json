@@ -1,7 +1,7 @@
 {
   "name": "dialect-atlas",
   "private": true,
-  "version": "2.2.1",
+  "version": "2.3.0",
   "type": "module",
   "description": "Interactive atlas of DIALECT cancer gene-effect interactions.",
   "scripts": {

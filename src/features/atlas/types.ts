@@ -1,8 +1,12 @@
 export const BMR_IDS = ["cbase", "dig", "mutsig"] as const;
+export const BMR_COUNT_THRESHOLDS = [1, 2, 3] as const;
 export const Q_THRESHOLDS = [0.001, 0.005, 0.01, 0.05] as const;
 export const DEFAULT_Q_THRESHOLD = 0.01;
+export const DEFAULT_MIN_IDENTIFIED_BMRS = 3;
+export const DEFAULT_MIN_SIGNIFICANT_BMRS = 3;
 
 export type Bmr = (typeof BMR_IDS)[number];
+export type BmrCount = (typeof BMR_COUNT_THRESHOLDS)[number];
 export type QThreshold = (typeof Q_THRESHOLDS)[number];
 export type AtlasView = "explore" | "compare" | "about" | "contact";
 export type AtlasMode = "consensus" | Bmr;
@@ -176,6 +180,8 @@ export interface AtlasUrlState {
   settings: boolean;
   exploreDisplay: ExploreDisplay;
   qThreshold: QThreshold;
+  minIdentifiedBmrs: BmrCount;
+  minSignificantBmrs: BmrCount;
   significantOnly: boolean;
   compareDirection: Direction;
   highlightLikelyPassengers: boolean;

@@ -3,8 +3,19 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { resultEffectText } from "@/features/atlas/components/explore-display";
 import { DIRECTION_METADATA } from "@/features/atlas/lib/atlas-metadata";
-import { backgroundSupport, fmtQ, resultIsSignificant, resultQ } from "@/features/atlas/lib/atlas-transform";
-import type { AtlasMode, Direction, InteractionResult } from "@/features/atlas/types";
+import {
+  backgroundSupport,
+  consensusQLabel,
+  fmtQ,
+  resultIsSignificant,
+  resultQ,
+} from "@/features/atlas/lib/atlas-transform";
+import type {
+  AtlasMode,
+  BmrCount,
+  Direction,
+  InteractionResult,
+} from "@/features/atlas/types";
 import { cn } from "@/lib/utils";
 
 const LIST_PAGE_SIZE = 60;
@@ -35,6 +46,8 @@ export function InteractionLane({
   results,
   mode,
   qThreshold,
+  minIdentifiedBmrs,
+  minSignificantBmrs,
   likelyPassengers,
   highlightLikelyPassengers,
   onSelect,
@@ -43,6 +56,8 @@ export function InteractionLane({
   results: InteractionResult[];
   mode: AtlasMode;
   qThreshold: number;
+  minIdentifiedBmrs: BmrCount;
+  minSignificantBmrs: BmrCount;
   likelyPassengers: ReadonlySet<string>;
   highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
@@ -76,8 +91,15 @@ export function InteractionLane({
         <ol className="space-y-1 p-2">
           {shown.map((result) => {
             const support = backgroundSupport(result, qThreshold);
-            const significant = resultIsSignificant(result, mode, qThreshold);
-            const q = resultQ(result, mode);
+            const significant = resultIsSignificant(result, mode, {
+              qThreshold,
+              minIdentifiedBmrs,
+              minSignificantBmrs,
+            });
+            const q = resultQ(result, mode, minSignificantBmrs);
+            const qLabel = mode === "consensus"
+              ? consensusQLabel(minSignificantBmrs)
+              : "q";
             const passengerA = highlightLikelyPassengers && likelyPassengers.has(result.ga);
             const passengerB = highlightLikelyPassengers && likelyPassengers.has(result.gb);
             return (
@@ -106,16 +128,17 @@ export function InteractionLane({
                     {resultEffectText(result, mode)}
                   </span>
                   <span className="hidden whitespace-nowrap font-mono text-[13px] text-muted sm:block">
-                    {mode === "consensus" ? "max " : ""}q {fmtQ(q)}
+                    {qLabel} {fmtQ(q)}
                   </span>
                   <span className="flex items-center justify-end gap-2 text-sm font-semibold text-muted">
                     <ArrowUpRight className="size-4 transition-colors group-hover:text-ink" aria-hidden />
                   </span>
                   <span className="col-start-1 flex items-center gap-3 text-[13px] font-semibold sm:hidden">
                     <span className="font-mono">{resultEffectText(result, mode)}</span>
-                    <span className="font-mono text-muted">{mode === "consensus" ? "max " : ""}q {fmtQ(q)}</span>
+                    <span className="font-mono text-muted">{qLabel} {fmtQ(q)}</span>
                     <span className="text-muted">
-                      {support.significant}/{support.independent} independent
+                      {support.identified}/{support.independent} identified ·{" "}
+                      {support.significant}/{support.independent} significant
                     </span>
                   </span>
                 </button>

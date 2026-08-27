@@ -67,8 +67,9 @@ never edit the immutable release to add UI annotations.
   and offer a one-step return to the ranked list.
 - **All three BMRs by default:** the default candidate set requires the exact pair and
   direction under CBaSE, DIG, and a real MutSigCV2 background. Exclude MutSig rows
-  derived from CBaSE fallback features. A consensus significance call requires every
-  background to pass the active cutoff; individual views use that model's q-value.
+  derived from CBaSE fallback features. Customize may independently lower the minimum
+  BMRs identifying and significant; both default to three. Individual views use that
+  model's q-value.
 - **One threshold everywhere:** q presets are controlled in Customize, shared by
   Explore, Compare, network, and pair detail, and serialized in the hash URL. Calls use
   strict `<`; MEGSA remains fixed at `p < 0.001` because that release field is a p-value.

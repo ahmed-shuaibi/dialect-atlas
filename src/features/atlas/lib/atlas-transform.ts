@@ -1,8 +1,11 @@
 import {
   BMR_IDS,
+  DEFAULT_MIN_IDENTIFIED_BMRS,
+  DEFAULT_MIN_SIGNIFICANT_BMRS,
   DEFAULT_Q_THRESHOLD,
   type AtlasMode,
   type Bmr,
+  type BmrCount,
   type CohortData,
   type DialectRow,
   type Direction,
@@ -56,6 +59,10 @@ type CohortIndexes = {
 };
 
 const indexCache = new WeakMap<CohortData, CohortIndexes>();
+const consensusCandidateCache = new WeakMap<
+  CohortData,
+  Partial<Record<Direction, InteractionResult[]>>
+>();
 
 function cohortIndexes(data: CohortData): CohortIndexes {
   const cached = indexCache.get(data);
@@ -103,6 +110,14 @@ export function mutsigFallbackForPair(
 function median(values: number[]): number {
   const ordered = [...values].sort((a, b) => a - b);
   return ordered[Math.floor(ordered.length / 2)] ?? 1;
+}
+
+function withoutMutsigFallback(
+  matches: ModelMatch[],
+  mutsigFallbackFeatures: string[],
+): ModelMatch[] {
+  if (mutsigFallbackFeatures.length === 0) return matches;
+  return matches.filter(({ bmr }) => bmr !== "mutsig");
 }
 
 /** Return a pair row in the requested gene order, preserving A/B contingency semantics. */
@@ -154,10 +169,17 @@ function allPairEvidence(
   });
 }
 
-function toResult(data: CohortData, representative: DialectRow & { direction: Direction }): InteractionResult {
+function toResult(
+  data: CohortData,
+  representative: DialectRow & { direction: Direction },
+): InteractionResult {
   const matches = exactMatches(data, representative);
   const pairEvidence = allPairEvidence(data, representative);
-  const percentiles = matches.map((match) => match.percentile);
+  const mutsigFallbackFeatures = pairEvidence.some(({ bmr }) => bmr === "mutsig")
+    ? mutsigFallbackForPair(data, representative.ga, representative.gb)
+    : [];
+  const percentiles = withoutMutsigFallback(matches, mutsigFallbackFeatures)
+    .map((match) => match.percentile);
   return {
     id: resultId(representative.direction, representative.ga, representative.gb),
     ga: representative.ga,
@@ -166,48 +188,81 @@ function toResult(data: CohortData, representative: DialectRow & { direction: Di
     representative,
     matches,
     pairEvidence,
-    mutsigFallbackFeatures: pairEvidence.some(({ bmr }) => bmr === "mutsig")
-      ? mutsigFallbackForPair(data, representative.ga, representative.gb)
-      : [],
+    mutsigFallbackFeatures,
     worstPercentile: percentiles.length ? Math.max(...percentiles) : 1,
     medianPercentile: median(percentiles),
   };
 }
 
+/** Same-direction BMR matches that contribute independent consensus evidence. */
+export function independentConsensusMatches(result: InteractionResult): ModelMatch[] {
+  return withoutMutsigFallback(result.matches, result.mutsigFallbackFeatures);
+}
+
+function compareConsensusRank(a: InteractionResult, b: InteractionResult): number {
+  return (
+    a.worstPercentile - b.worstPercentile ||
+    a.medianPercentile - b.medianPercentile ||
+    codePointCompare(a.id, b.id)
+  );
+}
+
+/** Structural consensus candidates are cached; threshold changes only filter this set. */
+function consensusCandidates(data: CohortData, direction: Direction): InteractionResult[] {
+  let cached = consensusCandidateCache.get(data);
+  if (!cached) {
+    cached = {};
+    consensusCandidateCache.set(data, cached);
+  }
+  const existing = cached[direction];
+  if (existing) return existing;
+
+  const indexes = cohortIndexes(data);
+  const seen = new Set<string>();
+  const results: InteractionResult[] = [];
+  for (const bmr of BMR_IDS) {
+    for (const row of indexes.byModel[bmr].values()) {
+      if (row.direction !== direction || isSameBaseGene(row)) continue;
+      const id = resultId(direction, row.ga, row.gb);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const result = toResult(data, row as DialectRow & { direction: Direction });
+      if (independentConsensusMatches(result).length > 0) results.push(result);
+    }
+  }
+  results.sort(compareConsensusRank);
+  cached[direction] = results;
+  return results;
+}
+
 /**
- * Three-BMR consensus: the exact gene-effect pair has the same direction under CBaSE,
- * DIG, and a real MutSigCV2 background. Optional significance filtering applies the
- * selected q cutoff to every model. Results use conservative directional rank percentiles.
+ * Consensus requires configurable independent BMR counts for exact same-direction
+ * identification and significance. Defaults preserve the strict three-BMR call.
  */
 export type ResultFilter = {
   qThreshold?: number;
   significantOnly?: boolean;
+  minIdentifiedBmrs?: BmrCount;
+  minSignificantBmrs?: BmrCount;
 };
 
 export function consensusResults(
   data: CohortData,
   direction: Direction,
-  { qThreshold = DEFAULT_Q_THRESHOLD, significantOnly = true }: ResultFilter = {},
+  {
+    qThreshold = DEFAULT_Q_THRESHOLD,
+    significantOnly = true,
+    minIdentifiedBmrs = DEFAULT_MIN_IDENTIFIED_BMRS,
+    minSignificantBmrs = DEFAULT_MIN_SIGNIFICANT_BMRS,
+  }: ResultFilter = {},
 ): InteractionResult[] {
-  const seen = new Set<string>();
-  const results: InteractionResult[] = [];
-  for (const row of data.models.cbase) {
-    if (row.direction !== direction || isSameBaseGene(row)) continue;
-    if (mutsigFallbackForPair(data, row.ga, row.gb).length > 0) continue;
-    const id = resultId(direction, row.ga, row.gb);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const result = toResult(data, row as DialectRow & { direction: Direction });
-    if (result.matches.length !== BMR_IDS.length) continue;
-    if (significantOnly && !result.matches.every(({ row: match }) => isSignificant(match, qThreshold))) continue;
-    results.push(result);
-  }
-  return results.sort(
-    (a, b) =>
-      a.worstPercentile - b.worstPercentile ||
-      a.medianPercentile - b.medianPercentile ||
-      codePointCompare(a.id, b.id),
-  );
+  return consensusCandidates(data, direction).filter((result) => {
+    const support = backgroundSupport(result, qThreshold);
+    return (
+      support.identified >= minIdentifiedBmrs &&
+      (!significantOnly || support.significant >= minSignificantBmrs)
+    );
+  });
 }
 
 export function modelResults(
@@ -271,25 +326,36 @@ export function filterResultsByGene(
 }
 
 /** The q-value that controls an interaction's visible significance encoding. */
-export function resultQ(result: InteractionResult, mode: AtlasMode): number {
+export function resultQ(
+  result: InteractionResult,
+  mode: AtlasMode,
+  minSignificantBmrs: BmrCount = DEFAULT_MIN_SIGNIFICANT_BMRS,
+): number {
   if (mode !== "consensus") {
     return result.matches.find(({ bmr }) => bmr === mode)?.row.q ?? 1;
   }
-  return Math.max(...result.matches.map(({ row }) => row.q ?? 1));
+  const ordered = independentConsensusMatches(result)
+    .map(({ row }) => row.q ?? 1)
+    .sort((a, b) => a - b);
+  return ordered[minSignificantBmrs - 1] ?? 1;
+}
+
+export function consensusQLabel(minSignificantBmrs: BmrCount): string {
+  if (minSignificantBmrs === 1) return "min q";
+  if (minSignificantBmrs === BMR_IDS.length) return "max q";
+  return "2nd q";
 }
 
 /** Independent background support after excluding any MutSigCV2 CBaSE fallback. */
 export function backgroundSupport(
   result: InteractionResult,
   qThreshold = DEFAULT_Q_THRESHOLD,
-): { significant: number; independent: number } {
+): { identified: number; significant: number; independent: number } {
   const hasMutsigFallback = result.mutsigFallbackFeatures.length > 0;
+  const matches = independentConsensusMatches(result);
   return {
-    significant: result.matches.filter(
-    ({ bmr, row }) =>
-      isSignificant(row, qThreshold) &&
-        !(bmr === "mutsig" && hasMutsigFallback),
-    ).length,
+    identified: matches.length,
+    significant: matches.filter(({ row }) => isSignificant(row, qThreshold)).length,
     independent: BMR_IDS.length - (hasMutsigFallback ? 1 : 0),
   };
 }
@@ -311,9 +377,18 @@ export function findResultForMode(
   filter: ResultFilter = {},
 ): InteractionResult | null {
   if (mode === "consensus") {
-    return consensusResults(data, selection.direction, filter).find(
-      ({ id }) => id === resultId(selection.direction, selection.ga, selection.gb),
-    ) ?? null;
+    const result = findResult(data, selection);
+    if (!result || isSameBaseGene(result)) return null;
+    const {
+      qThreshold = DEFAULT_Q_THRESHOLD,
+      significantOnly = true,
+      minIdentifiedBmrs = DEFAULT_MIN_IDENTIFIED_BMRS,
+      minSignificantBmrs = DEFAULT_MIN_SIGNIFICANT_BMRS,
+    } = filter;
+    const support = backgroundSupport(result, qThreshold);
+    if (support.identified < minIdentifiedBmrs) return null;
+    if (significantOnly && support.significant < minSignificantBmrs) return null;
+    return result;
   }
   const row = cohortIndexes(data).byModel[mode].get(
     resultId(selection.direction, selection.ga, selection.gb),
@@ -327,14 +402,15 @@ export function findResultForMode(
 export function resultIsSignificant(
   result: InteractionResult,
   mode: AtlasMode,
-  qThreshold = DEFAULT_Q_THRESHOLD,
+  {
+    qThreshold = DEFAULT_Q_THRESHOLD,
+    minIdentifiedBmrs = DEFAULT_MIN_IDENTIFIED_BMRS,
+    minSignificantBmrs = DEFAULT_MIN_SIGNIFICANT_BMRS,
+  }: Omit<ResultFilter, "significantOnly"> = {},
 ): boolean {
   if (mode === "consensus") {
-    return (
-      result.matches.length === BMR_IDS.length &&
-      result.mutsigFallbackFeatures.length === 0 &&
-      result.matches.every(({ row }) => isSignificant(row, qThreshold))
-    );
+    const support = backgroundSupport(result, qThreshold);
+    return support.identified >= minIdentifiedBmrs && support.significant >= minSignificantBmrs;
   }
   const match = result.matches.find(({ bmr }) => bmr === mode);
   return match != null && isSignificant(match.row, qThreshold);

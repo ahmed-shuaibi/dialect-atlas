@@ -20,6 +20,8 @@ describe("ExploreView", () => {
         mode="consensus"
         display="list"
         qThreshold={0.01}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         significantOnly
         onDisplayChange={() => undefined}
         onSignificantOnlyChange={onSignificantOnlyChange}
@@ -30,7 +32,7 @@ describe("ExploreView", () => {
       />,
     );
 
-    expect(screen.getByText("No pairs meet q < 0.01.")).toBeInTheDocument();
+    expect(screen.getByText("No pairs meet these consensus settings.")).toBeInTheDocument();
     expect(screen.getByRole("radiogroup", { name: "Explore display" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /significant interactions/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /direction/i })).not.toBeInTheDocument();
@@ -45,6 +47,8 @@ describe("ExploreView", () => {
         mode="cbase"
         display="list"
         qThreshold={0.005}
+        minIdentifiedBmrs={3}
+        minSignificantBmrs={3}
         significantOnly={false}
         onDisplayChange={() => undefined}
         onSignificantOnlyChange={() => undefined}

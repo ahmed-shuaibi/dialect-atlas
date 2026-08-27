@@ -9,12 +9,18 @@ import { PairEvidenceCard } from "@/features/atlas/components/pair/PairEvidenceC
 import { PairTechnicalDetails } from "@/features/atlas/components/pair/PairTechnicalDetails";
 import { modelState } from "@/features/atlas/components/pair/pair-evidence";
 import { BMR_LABEL } from "@/features/atlas/lib/atlas-metadata";
-import { backgroundSupport } from "@/features/atlas/lib/atlas-transform";
+import {
+  backgroundSupport,
+  resultIsSignificant,
+} from "@/features/atlas/lib/atlas-transform";
 import {
   BMR_IDS,
+  DEFAULT_MIN_IDENTIFIED_BMRS,
+  DEFAULT_MIN_SIGNIFICANT_BMRS,
   DEFAULT_Q_THRESHOLD,
   type AtlasMode,
   type Bmr,
+  type BmrCount,
   type DialectRow,
   type InteractionResult,
 } from "@/features/atlas/types";
@@ -24,6 +30,8 @@ export type PairDialogProps = {
   result: InteractionResult | null;
   mode: AtlasMode;
   qThreshold: number;
+  minIdentifiedBmrs: BmrCount;
+  minSignificantBmrs: BmrCount;
   likelyPassengers: ReadonlySet<string>;
   highlightLikelyPassengers: boolean;
   open: boolean;
@@ -35,6 +43,8 @@ export function PairDialog(props: PairDialogProps) {
     result,
     mode,
     qThreshold = DEFAULT_Q_THRESHOLD,
+    minIdentifiedBmrs = DEFAULT_MIN_IDENTIFIED_BMRS,
+    minSignificantBmrs = DEFAULT_MIN_SIGNIFICANT_BMRS,
     likelyPassengers,
     highlightLikelyPassengers,
     open,
@@ -47,24 +57,22 @@ export function PairDialog(props: PairDialogProps) {
       result.pairEvidence.find((item) => item.bmr === bmr)?.row,
     ]),
   ) as Record<Bmr, DialectRow | undefined>;
-  const hasMutsigFallback =
-    evidenceByModel.mutsig != null && result.mutsigFallbackFeatures.length > 0;
-  const independentBackgrounds = BMR_IDS.filter(
-    (bmr) => bmr !== "mutsig" || !hasMutsigFallback,
-  );
-  const directionAgreement = independentBackgrounds.filter(
-    (bmr) => evidenceByModel[bmr]?.direction === result.direction,
-  ).length;
   const support = backgroundSupport(result, qThreshold);
   const significantSupport = support.significant;
+  const consensusSignificant = resultIsSignificant(result, "consensus", {
+    qThreshold,
+    minIdentifiedBmrs,
+    minSignificantBmrs,
+  });
   const selectedRow = mode === "consensus" ? undefined : evidenceByModel[mode];
   const selectedState = mode === "consensus" ? undefined : modelState(selectedRow, result, qThreshold);
   const selectedFallback =
     mode === "mutsig" &&
     selectedRow != null &&
     result.mutsigFallbackFeatures.length > 0;
+  const consensusState = consensusSignificant ? "Significant" : "Not significant";
   const lead = mode === "consensus"
-    ? ""
+    ? `${consensusState} · ${support.identified}/${support.independent} identified · ${significantSupport}/${support.independent} significant`
     : selectedState === "significant"
       ? selectedFallback
         ? "Significant in MutSigCV2 view (CBaSE fallback)"
@@ -99,12 +107,12 @@ export function PairDialog(props: PairDialogProps) {
               Inferred driver states occur {me ? "less" : "more"} often together than expected.
             </DialogDescription>
             <p className="mt-5 text-lg font-semibold">
-              {mode === "consensus"
-                ? `${directionAgreement} of ${independentBackgrounds.length} backgrounds agree`
-                : lead}
+              {lead}
             </p>
             <p className="mt-1 text-sm font-medium text-muted">
-              {significantSupport} of {independentBackgrounds.length} meet q &lt; {qThreshold}.
+              {mode === "consensus"
+                ? `Requires ≥${minIdentifiedBmrs} identified and ≥${minSignificantBmrs} significant at q < ${qThreshold}.`
+                : `${significantSupport} of ${support.independent} meet q < ${qThreshold}.`}
             </p>
             {passengerFeatures.length > 0 && (
               <p className="mt-4 inline-flex rounded-full bg-passenger-soft px-3 py-1.5 text-sm font-semibold text-passenger">

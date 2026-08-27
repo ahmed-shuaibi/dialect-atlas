@@ -13,7 +13,13 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ui/theme";
 import { NETWORK_NODE_TYPES, effectLabel } from "@/features/atlas/components/network/GeneNode";
@@ -24,12 +30,16 @@ import type {
   Inspection,
   ResultEdge,
 } from "@/features/atlas/components/network/types";
-import { buildNetworkLayout } from "@/features/atlas/components/network-layout";
 import {
+  buildNetworkLayout,
+  type NetworkLayoutNode,
+} from "@/features/atlas/components/network-layout";
+import {
+  consensusQLabel,
   fmtQ,
   resultIsSignificant,
 } from "@/features/atlas/lib/atlas-transform";
-import type { AtlasMode, InteractionResult } from "@/features/atlas/types";
+import type { AtlasMode, BmrCount, InteractionResult } from "@/features/atlas/types";
 
 const FIT_OPTIONS = { padding: 0.14, minZoom: 0.2, maxZoom: 1.2 };
 const NETWORK_ARIA_LABEL_CONFIG = {
@@ -63,11 +73,30 @@ function countDirections(results: InteractionResult[]) {
   return counts;
 }
 
+function geneNodeAriaLabel(node: NetworkLayoutNode, likelyPassenger: boolean): string {
+  const connections = node.shownDegree === 1 ? "connection" : "connections";
+  const passengerLabel = likelyPassenger ? "; likely passenger gene effect" : "";
+  return `${node.gene}; ${effectLabel(node.effect)}; ${node.shownDegree} ${connections} shown${passengerLabel}`;
+}
+
+function interactionAriaLabel(
+  result: InteractionResult,
+  significant: boolean,
+  qLabel: string,
+  q: number,
+): string {
+  const direction = result.direction === "ME" ? "mutually exclusive" : "co-occurring";
+  const significance = significant ? "significant" : "not significant";
+  return `${result.ga} and ${result.gb}; ${direction}; ${significance}; ${qLabel} ${fmtQ(q)}`;
+}
+
 export function InteractionNetwork({
   results,
   totalResults,
   mode,
   qThreshold,
+  minIdentifiedBmrs,
+  minSignificantBmrs,
   likelyPassengers,
   highlightLikelyPassengers,
   onSelect,
@@ -76,6 +105,8 @@ export function InteractionNetwork({
   totalResults: number;
   mode: AtlasMode;
   qThreshold: number;
+  minIdentifiedBmrs: BmrCount;
+  minSignificantBmrs: BmrCount;
   likelyPassengers: ReadonlySet<string>;
   highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
@@ -90,18 +121,21 @@ export function InteractionNetwork({
   const [fitRevision, setFitRevision] = useState(0);
   const inspection = hovered ?? selected;
   const layout = useMemo(
-    () => buildNetworkLayout(results, mode, qThreshold),
-    [mode, qThreshold, results],
+    () => buildNetworkLayout(results, mode, qThreshold, minSignificantBmrs),
+    [minSignificantBmrs, mode, qThreshold, results],
   );
   const resultById = useMemo(
     () => new Map(results.map((result) => [result.id, result])),
     [results],
   );
   const directionCounts = useMemo(() => countDirections(results), [results]);
+  const qLabel = mode === "consensus" ? consensusQLabel(minSignificantBmrs) : "q";
   const initialNodes = useMemo<GeneNode[]>(
     () =>
       layout.nodes.map((node) => {
         const counts = directionCounts.get(node.id) ?? { ME: 0, CO: 0 };
+        const likelyPassenger =
+          highlightLikelyPassengers && likelyPassengers.has(node.id);
         return {
           id: node.id,
           type: "gene",
@@ -114,7 +148,7 @@ export function InteractionNetwork({
             shownDegree: node.shownDegree,
             meCount: counts.ME,
             coCount: counts.CO,
-            likelyPassenger: highlightLikelyPassengers && likelyPassengers.has(node.id),
+            likelyPassenger,
             active: false,
             dimmed: false,
           },
@@ -122,7 +156,7 @@ export function InteractionNetwork({
           selectable: true,
           focusable: true,
           deletable: false,
-          ariaLabel: `${node.gene}; ${effectLabel(node.effect)}; ${node.shownDegree} ${node.shownDegree === 1 ? "connection" : "connections"} shown${highlightLikelyPassengers && likelyPassengers.has(node.id) ? "; likely passenger gene effect" : ""}`,
+          ariaLabel: geneNodeAriaLabel(node, likelyPassenger),
         };
       }),
     [directionCounts, highlightLikelyPassengers, layout.nodes, likelyPassengers],
@@ -131,7 +165,13 @@ export function InteractionNetwork({
     () =>
       layout.edges.map((edge) => {
         const result = resultById.get(edge.id);
-        const significant = result ? resultIsSignificant(result, mode, qThreshold) : false;
+        const significant = result
+          ? resultIsSignificant(result, mode, {
+            qThreshold,
+            minIdentifiedBmrs,
+            minSignificantBmrs,
+          })
+          : false;
         return {
           id: edge.id,
           source: edge.source,
@@ -143,7 +183,7 @@ export function InteractionNetwork({
           deletable: false,
           interactionWidth: 22,
           ariaLabel: result
-            ? `${result.ga} and ${result.gb}; ${result.direction === "ME" ? "mutually exclusive" : "co-occurring"}; ${significant ? "significant" : "not significant"} at ${mode === "consensus" ? "maximum " : ""}q ${fmtQ(edge.q)}`
+            ? interactionAriaLabel(result, significant, qLabel, edge.q)
             : edge.id,
           style: {
             stroke: edge.direction === "ME" ? "var(--me)" : "var(--co)",
@@ -153,7 +193,7 @@ export function InteractionNetwork({
           },
         };
       }),
-    [layout.edges, mode, qThreshold, resultById],
+    [layout.edges, minIdentifiedBmrs, minSignificantBmrs, mode, qLabel, qThreshold, resultById],
   );
 
   useEffect(() => {
@@ -254,6 +294,24 @@ export function InteractionNetwork({
     : null;
   const meCount = results.filter(({ direction }) => direction === "ME").length;
   const coCount = results.filter(({ direction }) => direction === "CO").length;
+  const fitTrigger = useMemo(
+    () => [
+      mode,
+      qThreshold,
+      minIdentifiedBmrs,
+      minSignificantBmrs,
+      fitRevision,
+      ...layout.edges.map(({ id }) => id),
+    ].join(":"),
+    [
+      fitRevision,
+      layout.edges,
+      minIdentifiedBmrs,
+      minSignificantBmrs,
+      mode,
+      qThreshold,
+    ],
+  );
 
   const onNetworkKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -331,7 +389,7 @@ export function InteractionNetwork({
           colorMode={theme}
           ariaLabelConfig={NETWORK_ARIA_LABEL_CONFIG}
         >
-          <FitNetwork trigger={`${mode}:${qThreshold}:${results.map(({ id }) => id).join("|")}:${fitRevision}`} />
+          <FitNetwork trigger={fitTrigger} />
           {inspection && (
             <NetworkInspector
               node={inspectedNodeData}
@@ -339,6 +397,7 @@ export function InteractionNetwork({
               edge={inspectedLayoutEdge}
               mode={mode}
               qThreshold={qThreshold}
+              minSignificantBmrs={minSignificantBmrs}
               onSelect={onSelect}
             />
           )}

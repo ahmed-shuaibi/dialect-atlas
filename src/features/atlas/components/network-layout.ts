@@ -10,7 +10,14 @@ import {
   type SimulationNodeDatum,
 } from "d3-force";
 import { baseGene, codePointCompare, resultQ } from "@/features/atlas/lib/atlas-transform";
-import { DEFAULT_Q_THRESHOLD, type AtlasMode, type Direction, type InteractionResult } from "@/features/atlas/types";
+import {
+  DEFAULT_MIN_SIGNIFICANT_BMRS,
+  DEFAULT_Q_THRESHOLD,
+  type AtlasMode,
+  type BmrCount,
+  type Direction,
+  type InteractionResult,
+} from "@/features/atlas/types";
 
 export interface NetworkLayoutNode {
   id: string;
@@ -77,6 +84,7 @@ export function buildNetworkLayout(
   results: InteractionResult[],
   mode: AtlasMode,
   qThreshold = DEFAULT_Q_THRESHOLD,
+  minSignificantBmrs: BmrCount = DEFAULT_MIN_SIGNIFICANT_BMRS,
 ): NetworkLayout {
   const orderedResults = [...results].sort((a, b) => codePointCompare(a.id, b.id));
   const degrees = new Map<string, number>();
@@ -137,7 +145,7 @@ export function buildNetworkLayout(
       shownDegree: degrees.get(id) ?? 0,
     })),
     edges: orderedResults.map((result) => {
-      const q = resultQ(result, mode);
+      const q = resultQ(result, mode, minSignificantBmrs);
       return {
         id: result.id,
         source: result.ga,
