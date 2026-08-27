@@ -41,7 +41,7 @@ assert(
 assert(!html.includes("__ATLAS_SITE_URL__"), "site URL placeholder leaked into dist/index.html");
 assert(
   !html.includes("ahmed-shuaibi.github.io/dialect-atlas"),
-  "legacy GitHub Pages origin leaked into dist/index.html",
+  "legacy github.io origin leaked into dist/index.html",
 );
 assert(
   html.includes(`src="${basePath}assets/`) && html.includes(`href="${basePath}assets/`),

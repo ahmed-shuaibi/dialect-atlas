@@ -27,16 +27,17 @@ npm run dev
 ```
 
 The production build targets `https://dialectcanceratlas.com` at the site root.
-The deployment workflow sets the same values explicitly and validates the
-rendered metadata, asset paths, and release files before upload:
+Cloudflare Pages and the CI workflow set the same values explicitly. The build
+validates rendered metadata, asset paths, security headers, and release files:
 
 ```bash
 ATLAS_BASE_PATH=/ ATLAS_SITE_URL=https://dialectcanceratlas.com npm run build
 ```
 
-GitHub Pages remains the host and Cloudflare provides authoritative DNS. See
-[`docs/custom-domain.md`](docs/custom-domain.md) for the DNS, TLS, verification,
-cutover, and rollback contract.
+Cloudflare Pages project `dialect-cancer-atlas` deploys `main`; GitHub Actions is
+CI-only and GitHub Pages is retired. See
+[`docs/custom-domain.md`](docs/custom-domain.md) for the build, routing, security,
+redirect, and rollback contract.
 
 The release schema, provenance, thresholds, and field definitions are documented
 inside `public/data/releases/k100-2026-08-26/README.md`.

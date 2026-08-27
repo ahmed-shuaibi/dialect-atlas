@@ -2,7 +2,7 @@
  * Fail-closed validation for the complete immutable DIALECT Atlas K=100 release.
  *
  * This runs with Node alone so the exact committed data contract can be gated in the
- * Atlas repository and on GitHub Pages builds without the Python analysis environment.
+ * Atlas repository and on static-hosting builds without the Python analysis environment.
  */
 
 import { Buffer } from "node:buffer";
