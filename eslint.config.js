@@ -2,10 +2,9 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 
-// Minimal flat config — a real guardrail for the committed eslint-disable directives
-// (no-explicit-any in NetworkView, exhaustive-deps in useAtlas). Lint with `npm run lint`.
+// Flat TypeScript/React guardrails for both the web app and release validator.
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "scripts"] },
+  { ignores: ["dist", "node_modules"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

@@ -1,51 +1,77 @@
 import { useCallback, useEffect, useState } from "react";
+import type { AtlasMode, AtlasUrlState, AtlasView, Direction } from "@/features/atlas/types";
 
-/** Read the current `#key=value&...` params from the URL hash. */
-function readHash(): Record<string, string> {
-  const h = window.location.hash.replace(/^#/, "");
-  const out: Record<string, string> = {};
-  for (const part of h.split("&")) {
-    if (!part) continue;
-    const i = part.indexOf("=");
-    if (i === -1) continue;
-    out[decodeURIComponent(part.slice(0, i))] = decodeURIComponent(part.slice(i + 1));
-  }
-  return out;
+export const URL_DEFAULTS: AtlasUrlState = {
+  view: "explore",
+  mode: "consensus",
+  settings: false,
+  strict: false,
+  compareDirection: "ME",
+};
+
+const isView = (value: string | null): value is AtlasView =>
+  value === "explore" || value === "compare" || value === "about";
+const isMode = (value: string | null): value is AtlasMode =>
+  value === "consensus" || value === "cbase" || value === "dig" || value === "mutsig";
+const isDirection = (value: string | null): value is Direction => value === "ME" || value === "CO";
+
+export function parseAtlasHash(hash: string): AtlasUrlState {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const cohort = params.get("cohort") || undefined;
+  const pair = params.get("pair") || undefined;
+  const view = params.get("view");
+  const mode = params.get("mode");
+  const compareDirection = params.get("compare");
+  return {
+    view: isView(view) ? view : URL_DEFAULTS.view,
+    cohort,
+    mode: isMode(mode) ? mode : URL_DEFAULTS.mode,
+    pair,
+    settings: params.get("settings") === "1",
+    strict: params.get("strict") === "1",
+    compareDirection: isDirection(compareDirection)
+      ? compareDirection
+      : URL_DEFAULTS.compareDirection,
+  };
 }
 
-/**
- * Tiny shareable URL-state hook: keeps a flat string map in the location hash so the view is a
- * bookmarkable link. Four keys (see VIEW_DEFAULTS): c (cohort) · b (BMR model) · d (direction) ·
- * f (passenger filter). top-K is a fixed constant and the selected pair is local component state;
- * neither is hashed.
- */
-export function useHashState(defaults: Record<string, string>) {
-  const [state, setState] = useState<Record<string, string>>(() => ({
-    ...defaults,
-    ...readHash(),
-  }));
+export function serializeAtlasHash(state: AtlasUrlState): string {
+  const params = new URLSearchParams();
+  params.set("view", state.view);
+  if (state.cohort) params.set("cohort", state.cohort);
+  params.set("mode", state.mode);
+  if (state.pair) params.set("pair", state.pair);
+  if (state.settings) params.set("settings", "1");
+  if (state.strict) params.set("strict", "1");
+  params.set("compare", state.compareDirection);
+  return `#${params.toString()}`;
+}
+
+export function useHashState() {
+  const [state, setState] = useState<AtlasUrlState>(() => parseAtlasHash(window.location.hash));
 
   useEffect(() => {
-    const onHash = () => setState((s) => ({ ...s, ...readHash() }));
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const sync = () => setState(parseAtlasHash(window.location.hash));
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => {
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener("popstate", sync);
+    };
   }, []);
 
-  const set = useCallback((patch: Record<string, string | undefined>) => {
-    setState((prev) => {
-      const next = { ...prev };
-      for (const [k, v] of Object.entries(patch)) {
-        if (v === undefined || v === "") delete next[k];
-        else next[k] = v;
-      }
-      const qs = Object.entries(next)
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-        .join("&");
-      const url = `${window.location.pathname}${window.location.search}#${qs}`;
-      window.history.replaceState(null, "", url);
-      return next;
-    });
-  }, []);
+  const set = useCallback(
+    (patch: Partial<AtlasUrlState>, options?: { replace?: boolean }) => {
+      setState((previous) => {
+        const next = { ...previous, ...patch };
+        const url = `${window.location.pathname}${window.location.search}${serializeAtlasHash(next)}`;
+        if (options?.replace) window.history.replaceState(null, "", url);
+        else window.history.pushState(null, "", url);
+        return next;
+      });
+    },
+    [],
+  );
 
   return [state, set] as const;
 }

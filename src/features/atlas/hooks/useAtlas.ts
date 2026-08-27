@@ -1,71 +1,75 @@
-import { useEffect, useState } from "react";
-import { loadAtlas, loadCohort } from "@/features/atlas/lib/atlas-data";
-import type { Atlas, Cohort, CohortMeta } from "@/features/atlas/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  clearAtlasCache,
+  loadCohort,
+  loadRelease,
+} from "@/features/atlas/lib/atlas-data";
+import type { CohortData, CohortMeta, ReleaseBundle } from "@/features/atlas/types";
 
-export interface UseAtlas {
-  atlas: Atlas | null;
+type LoadState<T> = {
+  data: T | null;
+  status: "idle" | "loading" | "ready" | "error";
   error: string | null;
-}
+};
 
-/** Index-load lifecycle (error / data) with an abort guard on unmount. */
-export function useAtlas(): UseAtlas {
-  const [atlas, setAtlas] = useState<Atlas | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const initial = <T,>(): LoadState<T> => ({ data: null, status: "loading", error: null });
+
+export function useRelease() {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<LoadState<ReleaseBundle>>(initial);
 
   useEffect(() => {
-    const ctrl = new AbortController();
-    loadAtlas(ctrl.signal)
-      .then((a) => {
-        if (!ctrl.signal.aborted) setAtlas(a);
+    let active = true;
+    setState(initial());
+    void loadRelease()
+      .then((data) => {
+        if (active) setState({ data, status: "ready", error: null });
       })
-      .catch((e) => {
-        if (!ctrl.signal.aborted) setError(String(e));
+      .catch((error: unknown) => {
+        if (active) setState({ data: null, status: "error", error: String(error) });
       });
-    return () => ctrl.abort();
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+
+  const retry = useCallback(() => {
+    clearAtlasCache();
+    setAttempt((value) => value + 1);
   }, []);
 
-  return { atlas, error };
+  return { ...state, retry };
 }
 
-export interface UseCohort {
-  /** The hydrated cohort (full edges + drivers), or null until the shard arrives. */
-  cohort: Cohort | null;
-  error: string | null;
-}
-
-/**
- * Lazily hydrate one cohort's heavy shard on demand. `meta` is the index-level cohort (meta +
- * counts) whose id selects the shard; re-fetches whenever the id changes, with an abort guard so
- * a fast cohort switch never lands a stale shard. Re-uses the already-hydrated cohort when its id
- * matches, so flipping BMR / direction / passenger filter never re-fetches.
- */
-export function useCohort(meta: CohortMeta | null): UseCohort {
-  const [cohort, setCohort] = useState<Cohort | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const id = meta?.id ?? null;
+export function useCohort(meta: CohortMeta | null) {
+  const request = useRef(0);
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<LoadState<CohortData>>({
+    data: null,
+    status: "idle",
+    error: null,
+  });
 
   useEffect(() => {
+    const current = ++request.current;
     if (!meta) {
-      setCohort(null);
+      setState({ data: null, status: "idle", error: null });
       return;
     }
-    // already hydrated (edges present) → reuse synchronously, no fetch
-    if (cohort?.id === meta.id && cohort.drivers.length > 0) return;
 
-    const ctrl = new AbortController();
-    setError(null);
-    loadCohort(meta, ctrl.signal)
-      .then((c) => {
-        if (!ctrl.signal.aborted) setCohort(c);
+    // Clear the prior cohort immediately: a fast selection must never show stale results.
+    setState({ data: null, status: "loading", error: null });
+    void loadCohort(meta)
+      .then((data) => {
+        if (request.current === current) setState({ data, status: "ready", error: null });
       })
-      .catch((e) => {
-        if (!ctrl.signal.aborted) setError(String(e));
+      .catch((error: unknown) => {
+        if (request.current === current) {
+          setState({ data: null, status: "error", error: String(error) });
+        }
       });
-    return () => ctrl.abort();
-    // keyed by id only: BMR/direction/filter changes keep the same hydrated cohort.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [meta, attempt]);
 
-  return { cohort, error };
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return { ...state, retry };
 }

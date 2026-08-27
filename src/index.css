@@ -1,234 +1,120 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/*
- * DIALECT Atlas — dark-only design system, ported from shuaibi-portfolio.
- * Thesis: chrome is silent (near-monochrome grayscale), data is loud (the only
- * saturated color in the product is the ME/CO edge encoding). All critique
- * must-fixes folded in: solid border token, dark-only, dot-grid masked behind
- * data surfaces, mandatory card inset-highlight, AA-safe muted-foreground-strong,
- * brand focus ring, color-scheme: dark.
- */
 :root {
-  color-scheme: dark;
-
-  --background: oklch(0.02 0 0); /* #050505 near-black canvas */
-  --foreground: oklch(0.92 0 0); /* #e4e4e7 soft white body */
-  --card: oklch(0.08 0 0);
-  --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.09 0 0);
-  --popover-foreground: oklch(0.92 0 0);
-  --primary: oklch(0.92 0 0);
-  --primary-foreground: oklch(0.02 0 0);
-  --secondary: oklch(0.15 0 0);
-  --secondary-foreground: oklch(0.92 0 0);
-  --muted: oklch(0.15 0 0);
-  /* NON-TEXT decoration ONLY (separators, dot-grid, faint rules). 2.82:1 — fails AA. */
-  --muted-foreground: oklch(0.45 0 0);
-  /* default for any text read as CONTENT — 5.77:1, AA-safe */
-  --muted-foreground-strong: oklch(0.62 0 0);
-  /* smallest 12px mono labels/eyebrows — extra contrast headroom */
-  --muted-foreground-stronger: oklch(0.66 0 0);
-  --accent: oklch(0.15 0 0);
-  --accent-foreground: oklch(0.92 0 0);
-  --destructive: oklch(0.577 0.245 27.3);
-  --border: oklch(0.15 0 0); /* SOLID #27272a (critique #1) */
-  --input: oklch(0.18 0 0);
-  --ring: #8ab2c0; /* brand focus ring (critique #6) */
-
-  /* TWO radius tiers only: container (lg) + interactive (md) */
-  --radius: 0.5rem; /* interactive (md) baseline */
-  --radius-container: 0.75rem; /* surfaces / overlays (lg) */
-
-  --brand: #8ab2c0; /* the single grayscale-breaking accent — focus / driver only */
-  --brand-soft: #2b3640; /* muted brand, e.g. focused-row tint */
-
-  /* data-viz encoding — the ONLY saturated colors in the product */
-  --me-color: #4ea3df; /* mutual exclusivity — blue, solid (Okabe-Ito derived) */
-  --co-color: #e9a13b; /* co-occurrence — amber, dashed */
-  --ns-color: #6b7280;
-  --node-fill: oklch(0.5 0.015 220);
-
-  /* near-black plane behind the network (replaces stray #0a0a0a) */
-  --canvas: oklch(0.025 0 0);
-
-  /* ELEVATION — solid border + inset highlight, NEVER drop shadows */
-  --elev-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  /* overlays only: a stronger inset so menus/tooltips separate from content behind */
-  --elev-overlay: inset 0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-
-  /* one shared control trigger width (replaces w-[180/200/280/340px]) */
-  --control-width: 13.5rem; /* 216 */
-
-  /* single network-height source of truth, shared by NetworkView, its lazy fallback, and the
-     loading skeleton so the graph never causes layout shift (CLS). Leads the page as the hero
-     visual, so it earns real presence. */
-  --network-height: clamp(340px, 58vh, 600px);
-}
-
-@media (min-width: 640px) {
-  :root {
-    --network-height: clamp(380px, 74vh, 660px);
-  }
+  color-scheme: light;
+  --canvas: #f3ede2;
+  --paper: #fffaf2;
+  --ink: #191915;
+  --muted: #665f56;
+  --line: #d9d0c2;
+  --sand: #eae0d1;
+  --sand-deep: #ddd0bd;
+  --me: #315fc0;
+  --me-soft: #e7edfb;
+  --co: #9d4324;
+  --co-soft: #f8e8df;
+  --support: #2f6a4f;
+  --support-soft: #e3efe7;
+  --alert: #a13e2b;
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", system-ui, sans-serif;
-  --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "Montserrat Variable", "Avenir Next", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* ── Type scale (ratio ~1.25, 5 sizes; line-heights snapped to 4px).
-     Generates text-eyebrow / text-meta / text-body / text-h2 / text-h1. ── */
-  --text-eyebrow: 0.75rem; /* 12 — mono eyebrow / label */
-  --text-eyebrow--line-height: 1rem; /* 16 */
-  --text-meta: 0.8125rem; /* 13 — meta + data */
-  --text-meta--line-height: 1.25rem; /* 20 (mono ≈1.4) */
-  --text-body: 1rem; /* 16 — body */
-  --text-body--line-height: 1.5rem; /* 24 (1.5) */
-  --text-h2: 1.5625rem; /* 25 — h2 */
-  --text-h2--line-height: 1.8rem; /* ≈1.15 */
-  --text-h1: 1.9375rem; /* 31 — h1 */
-  --text-h1--line-height: 2.25rem; /* ≈1.15 */
-
-  /* ── Spacing tokens — strict 4/8 grid. Generates p-/m-/gap-* utilities:
-     intra (4) · label (8) · caption (16) · control-row (24) · section (48) · page-top (64). ── */
-  --spacing-intra: 0.25rem;
-  --spacing-label: 0.5rem;
-  --spacing-caption: 1rem;
-  --spacing-control-row: 1.5rem;
-  --spacing-section: 3rem;
-  --spacing-page-top: 4rem;
-
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted-foreground-strong: var(--muted-foreground-strong);
-  --color-muted-foreground-stronger: var(--muted-foreground-stronger);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-brand: var(--brand);
-  --color-brand-soft: var(--brand-soft);
   --color-canvas: var(--canvas);
-  --color-me: var(--me-color);
-  --color-co: var(--co-color);
-  --color-ns: var(--ns-color);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-sand: var(--sand);
+  --color-sand-deep: var(--sand-deep);
+  --color-me: var(--me);
+  --color-me-soft: var(--me-soft);
+  --color-co: var(--co);
+  --color-co-soft: var(--co-soft);
+  --color-support: var(--support);
+  --color-support-soft: var(--support-soft);
+  --color-alert: var(--alert);
 
-  /* TWO radius tiers — interactive (md) and container (lg). sm/xl alias these
-     so any stray downstream usage still resolves to one of the two tiers. */
-  --radius-sm: var(--radius);
-  --radius-md: var(--radius);
-  --radius-lg: var(--radius-container);
-  --radius-xl: var(--radius-container);
+  --shadow-soft: 0 18px 45px rgba(67, 56, 41, 0.07), 0 2px 8px rgba(67, 56, 41, 0.04);
 }
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: var(--line);
   }
+
+  html {
+    min-width: 320px;
+    overflow-x: clip;
+    background: var(--canvas);
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background:
+      radial-gradient(circle at 8% 2%, rgba(255, 255, 255, 0.75), transparent 27rem),
+      var(--canvas);
+    color: var(--ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    /* dot-grid texture lives in the GUTTER only; opaque data surfaces mask it */
-    background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1.1px, transparent 1.1px);
-    background-size: 22px 22px;
   }
+
+  button,
+  input {
+    font: inherit;
+  }
+
   ::selection {
-    @apply bg-foreground text-background;
-  }
-  ::-webkit-scrollbar {
-    width: 9px;
-    height: 9px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: oklch(0.22 0 0);
-    border-radius: 5px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.28 0 0);
-    background-clip: padding-box;
-  }
-  html {
-    scroll-behavior: smooth;
+    background: var(--ink);
+    color: var(--paper);
   }
 }
 
 @layer components {
-  /* wide-tracked mono eyebrow — the "designed" signature, ported from portfolio */
+  .site-shell {
+    width: min(100% - 2.5rem, 92rem);
+    margin-inline: auto;
+  }
+
   .eyebrow {
-    font-family: var(--font-mono);
-    font-size: var(--text-eyebrow); /* 12 */
-    line-height: var(--text-eyebrow--line-height);
-    letter-spacing: 0.22em;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.17em;
+    line-height: 1.1;
     text-transform: uppercase;
-    color: var(--muted-foreground-stronger); /* AA-safe; eyebrows are content */
   }
-  /* one shared control trigger width (Cohort / BMR / Show dropdowns) */
-  .control-width {
-    width: var(--control-width);
-  }
-  /* shared network height (NetworkView surface, lazy fallback, loading skeleton) */
-  .h-network {
-    height: var(--network-height);
-  }
-  .hairline {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.07);
-  }
-  /* opaque data surface — masks the dot-grid, lifted by border + inset highlight */
-  .surface {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-container);
-    box-shadow: var(--elev-highlight); /* elevation = border + inset, NEVER drop shadow */
-    position: relative;
-    isolation: isolate;
-  }
-  /* the network sits on the near-black plane so the edge colors win */
-  .canvas-surface {
-    background: var(--canvas);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-container);
-    position: relative;
-    isolation: isolate;
-  }
-  .tnum {
-    font-variant-numeric: tabular-nums;
-  }
+
   .focus-ring:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px var(--background),
-      0 0 0 4px var(--brand);
+    outline: 3px solid var(--ink);
+    outline-offset: 3px;
+  }
+}
+
+@media (max-width: 639px) {
+  .site-shell {
+    width: min(100% - 1.5rem, 92rem);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

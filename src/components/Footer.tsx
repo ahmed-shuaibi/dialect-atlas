@@ -1,17 +1,9 @@
-export function Footer() {
+export function Footer({ releaseId }: { releaseId?: string }) {
   return (
-    <footer className="mx-auto max-w-[1400px] px-5 pb-12">
-      <div className="hairline mb-5" />
-      <div className="flex flex-wrap items-center justify-between gap-2 text-meta text-muted-foreground-strong">
-        <span>Companion atlas to the DIALECT manuscript.</span>
-        <a
-          className="focus-ring rounded transition-colors hover:text-foreground"
-          href="https://github.com/raphael-group/dialect"
-          target="_blank"
-          rel="noreferrer"
-        >
-          raphael-group/dialect
-        </a>
+    <footer className="site-shell pb-10 pt-20">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6 text-xs font-semibold text-muted">
+        <span>DIALECT manuscript companion.</span>
+        {releaseId && <span className="font-mono text-[10px]">{releaseId}</span>}
       </div>
     </footer>
   );
