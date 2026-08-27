@@ -84,7 +84,11 @@ describe("AboutView content contract", () => {
     expect(steps).toHaveLength(3);
     steps.forEach((step) => {
       expect(step).toHaveClass("grid", "grid-rows-[auto_1fr_auto]");
-      expect(step.querySelector(".formulation-visual")).toHaveClass("h-40");
+      expect(step.querySelector(".formulation-visual")).toHaveClass(
+        "h-40",
+        "grid-rows-[1.25rem_1fr]",
+      );
+      expect(step.querySelector(".formulation-diagram")).not.toBeNull();
       expect(step.lastElementChild).toHaveClass("min-h-24");
     });
   });

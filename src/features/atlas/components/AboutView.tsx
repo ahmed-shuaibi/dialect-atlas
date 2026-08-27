@@ -201,9 +201,13 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
               className="formulation-step grid min-h-80 grid-rows-[auto_1fr_auto] gap-4 bg-paper p-6 sm:p-7"
             >
               <span className="font-mono text-xs text-muted">0{index + 1}</span>
-              <div className="formulation-visual flex h-40 w-full flex-col items-center justify-center gap-5 py-2">
-                <span className="font-mono text-sm font-medium text-brand">{step.formula}</span>
-                {step.visual}
+              <div className="formulation-visual grid h-40 w-full grid-rows-[1.25rem_1fr] gap-3">
+                <span className="grid place-items-center text-center font-mono text-sm font-medium text-brand">
+                  {step.formula}
+                </span>
+                <div className="formulation-diagram flex items-center justify-center">
+                  {step.visual}
+                </div>
               </div>
               <div className="min-h-24">
                 <h3 className="text-2xl font-semibold">{step.label}</h3>
