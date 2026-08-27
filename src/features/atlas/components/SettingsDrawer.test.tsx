@@ -30,6 +30,22 @@ function DrawerHarness({ showConsensusThresholds = true }) {
 }
 
 describe("SettingsDrawer consensus thresholds", () => {
+  it("uses a pure right-edge sidebar transition", () => {
+    render(<DrawerHarness />);
+
+    expect(screen.getByRole("dialog", { name: "Customize" })).toHaveClass(
+      "left-auto",
+      "right-0",
+      "top-0",
+      "data-[state=open]:slide-in-from-right",
+      "data-[state=closed]:slide-out-to-right",
+    );
+    expect(screen.getByRole("dialog", { name: "Customize" })).not.toHaveClass(
+      "data-[state=open]:slide-in-from-bottom",
+      "data-[state=closed]:slide-out-to-bottom",
+    );
+  });
+
   it("exposes independent, keyboard-operable 1/2/3 radiogroups", async () => {
     const user = userEvent.setup();
     render(<DrawerHarness />);
