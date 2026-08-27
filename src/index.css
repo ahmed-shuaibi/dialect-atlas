@@ -3,24 +3,26 @@
 
 :root {
   color-scheme: light;
-  --canvas: #f3ede2;
-  --paper: #fffaf2;
-  --ink: #191915;
-  --muted: #665f56;
-  --line: #d9d0c2;
-  --sand: #eae0d1;
-  --sand-deep: #ddd0bd;
-  --me: #315fc0;
-  --me-soft: #e7edfb;
-  --co: #9d4324;
-  --co-soft: #f8e8df;
-  --support: #2f6a4f;
-  --support-soft: #e3efe7;
-  --alert: #a13e2b;
+  --canvas: #f4f1ea;
+  --paper: #fcfaf6;
+  --ink: #182025;
+  --muted: #5f686c;
+  --line: #d7d2c9;
+  --sand: #ebe6dc;
+  --sand-deep: #dfd8cc;
+  --brand: #087e8b;
+  --brand-soft: #e0f0ef;
+  --me: #315f8b;
+  --me-soft: #e3edf5;
+  --co: #a04d3e;
+  --co-soft: #f5e7e1;
+  --support: #356b54;
+  --support-soft: #e3eee8;
+  --alert: #a23e35;
 }
 
 @theme inline {
-  --font-sans: "Montserrat Variable", "Avenir Next", system-ui, sans-serif;
+  --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
   --color-canvas: var(--canvas);
@@ -30,6 +32,8 @@
   --color-line: var(--line);
   --color-sand: var(--sand);
   --color-sand-deep: var(--sand-deep);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
   --color-me: var(--me);
   --color-me-soft: var(--me-soft);
   --color-co: var(--co);
@@ -38,7 +42,7 @@
   --color-support-soft: var(--support-soft);
   --color-alert: var(--alert);
 
-  --shadow-soft: 0 18px 45px rgba(67, 56, 41, 0.07), 0 2px 8px rgba(67, 56, 41, 0.04);
+  --shadow-soft: 0 1px 2px rgba(24, 32, 37, 0.04), 0 10px 28px rgba(24, 32, 37, 0.055);
 }
 
 @layer base {
@@ -57,9 +61,7 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-    background:
-      radial-gradient(circle at 8% 2%, rgba(255, 255, 255, 0.75), transparent 27rem),
-      var(--canvas);
+    background: var(--canvas);
     color: var(--ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -72,8 +74,14 @@
   }
 
   ::selection {
-    background: var(--ink);
+    background: var(--brand);
     color: var(--paper);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 }
 
@@ -85,16 +93,23 @@
 
   .eyebrow {
     color: var(--muted);
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.17em;
+    font-size: 0.66rem;
+    font-weight: 750;
+    letter-spacing: 0.14em;
     line-height: 1.1;
     text-transform: uppercase;
   }
 
   .focus-ring:focus-visible {
-    outline: 3px solid var(--ink);
+    outline: 3px solid var(--brand);
     outline-offset: 3px;
+  }
+
+  .surface-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper);
+    box-shadow: var(--shadow-soft);
   }
 }
 

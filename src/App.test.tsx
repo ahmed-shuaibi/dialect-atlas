@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/App";
 import { clearAtlasCache } from "@/features/atlas/lib/atlas-data";
 
@@ -152,9 +152,9 @@ const cohort = {
       "wesco_q",
     ],
     rows: [
-      ["TP53_M", "KRAS_M", 0.001, 0.9, 0.004, 0.9, 0.002, 0.8, 0.006, 0.8, 9, 0.001, 0.004, 0.003, 0.9, 0.007, 0.9],
-      ["EGFR_M", "PIK3CA_M", 0.8, 0.001, 0.8, 0.004, 0.7, 0.002, 0.7, 0.006, 1, 0.2, 0.3, 0.8, 0.003, 0.8, 0.007],
-      ["ALK_M", "ROS1_M", 0.0001, 0.8, 0.0002, 0.8, 0.0003, 0.7, 0.0004, 0.7, 12, 0.0002, 0.0004, 0.0005, 0.8, 0.0006, 0.8],
+      baselineRow("TP53_M", "KRAS_M", 0.004),
+      baselineRow("EGFR_M", "PIK3CA_M", 0.8),
+      baselineRow("ALK_M", "ROS1_M", 0.0002),
       baselineRow("BRAF_M", "NRAS_M", 0.0003),
       baselineRow("CDKN2A_M", "RB1_M", 0.0004),
     ],
@@ -168,212 +168,195 @@ function json(value: unknown) {
   return { ok: true, status: 200, json: async () => value } as Response;
 }
 
-describe("Atlas critical flow", () => {
+function installFetch(cohortPayload: typeof cohort = cohort) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("manifest.json")) return json(manifest);
+      if (url.endsWith("index.json")) return json(index);
+      if (url.endsWith("TCGA__LUAD.json")) return json(cohortPayload);
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    }),
+  );
+}
+
+function resultIds(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>("[data-result-id]"))
+    .map((element) => element.dataset.resultId)
+    .filter((id): id is string => id != null)
+    .sort();
+}
+
+function expectFact(label: string, value: string) {
+  const fact = screen.getByText(label).parentElement;
+  expect(fact).not.toBeNull();
+  expect(fact).toHaveTextContent(value);
+}
+
+describe("Atlas v2 critical flow", () => {
   beforeEach(() => {
     clearAtlasCache();
-    window.history.replaceState(null, "", "/#view=explore&mode=consensus&compare=ME");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith("manifest.json")) return json(manifest);
-        if (url.endsWith("index.json")) return json(index);
-        if (url.endsWith("TCGA__LUAD.json")) return json(cohort);
-        return { ok: false, status: 404, json: async () => ({}) } as Response;
-      }),
+    window.history.replaceState(
+      null,
+      "",
+      "/#view=explore&mode=consensus&display=network&direction=all&compare=ME",
     );
+    installFetch();
   });
 
-  it("starts with a searchable choice, remains axe-clean, and opens addressable pair detail", async () => {
+  it("chooses cancer then cohort, shows significant counts, and opens addressable evidence", async () => {
     const user = userEvent.setup();
     const { container } = render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Choose a cancer." })).toBeInTheDocument();
-    expect(window.location.hash).not.toContain("cohort=");
-    // JSDOM has no canvas/layout engine, so contrast is verified in browser QA.
+    const navigation = screen.getByRole("navigation", { name: "Primary" });
+    expect(
+      within(navigation)
+        .getAllByRole("link")
+        .slice(0, 3)
+        .map((link) => link.textContent),
+    ).toEqual(["About", "Explore", "Compare"]);
+
+    await user.click(screen.getByRole("button", { name: /^Lung\b/ }));
+    expect(await screen.findByText("Choose a study cohort.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Lung adenocarcinoma/ }));
+
+    expect(await screen.findByRole("heading", { name: "Significant interactions" })).toBeInTheDocument();
+    expectFact("Significant ME", "1");
+    expectFact("Significant CO", "1");
+    expect(window.location.hash).toContain("cohort=TCGA__LUAD");
+
+    await user.click(screen.getByRole("button", { name: "Show list" }));
+    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
     const audit = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
     expect(audit.violations).toEqual([]);
 
-    await user.type(screen.getByRole("combobox", { name: "Cancer and cohort search" }), "lung");
-    await user.click(screen.getByText("Lung adenocarcinoma"));
-
-    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
-    expect(screen.getByText("_M", { exact: true })).toBeInTheDocument();
-    expect(screen.getByText("_N", { exact: true })).toBeInTheDocument();
-    expect(window.location.hash).toContain("cohort=TCGA__LUAD");
-
-    const gene = screen.getAllByText("TP53_M")[0];
-    const resultButton = gene.closest("button");
-    expect(resultButton).not.toBeNull();
-    await user.click(resultButton!);
+    const pair = container.querySelector<HTMLElement>(
+      '[data-result-id="ME::KRAS_M::TP53_M"] button',
+    );
+    expect(pair).not.toBeNull();
+    await user.click(pair!);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText(/FDR-supported at q < 0.01 in 3\/3/)).toBeInTheDocument();
-    expect(screen.getByText(/1 sample had no background support/)).toBeInTheDocument();
+    expect(screen.getByText("Significant under all 3 backgrounds")).toBeInTheDocument();
+    expect(screen.getByText(/3\/3 backgrounds agree on ME; 3\/3 meet/)).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=ME%3A%3AKRAS_M%3A%3ATP53_M");
-
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    await user.click(screen.getByRole("button", { name: "Open Atlas settings" }));
-    await user.click(screen.getByRole("radio", { name: /^CBaSE\b/ }));
-    await waitFor(() => expect(window.location.hash).toContain("mode=cbase"));
   });
 
-  it("rejects a stale pair deep link when the active strict view excludes it", async () => {
+  it("keeps a small significant result set identical in the network and list", async () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&strict=1&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&compare=ME",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=network&direction=all&compare=ME",
+    );
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    const network = await screen.findByRole("region", {
+      name: "Significant interaction network",
+    });
+    expect(
+      network,
+    ).toBeInTheDocument();
+    expect(network).toHaveTextContent("2 significant pairs");
+
+    await user.click(screen.getByRole("button", { name: "Show list" }));
+    expect(await screen.findByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
+    expect(resultIds(container)).toEqual([
+      "CO::EGFR_M::PIK3CA_M",
+      "ME::KRAS_M::TP53_M",
+    ]);
+    expect(window.location.hash).toContain("display=list");
+  });
+
+  it("changes the significance model in settings and recomputes the facts and result set", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list&direction=all&compare=ME",
+    );
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Significant interactions" })).toBeInTheDocument();
+    expectFact("Significant ME", "1");
+    await user.click(screen.getByRole("button", { name: "Open Atlas settings" }));
+    await user.click(screen.getByRole("radio", { name: /^Significant with CBaSE\b/ }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(window.location.hash).toContain("mode=cbase"));
+    expectFact("Significant ME", "2");
+    expectFact("Significant CO", "1");
+    expect(await screen.findByText("BRAF_M")).toBeInTheDocument();
+  });
+
+  it("ignores legacy strict state and removes a non-significant consensus pair deep link", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&strict=0&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list&direction=all&compare=ME",
     );
     const unsupported = structuredClone(cohort);
     unsupported.models.dig.rows[0][17] = 0.02;
-    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("manifest.json")) return json(manifest);
-      if (url.endsWith("index.json")) return json(index);
-      if (url.endsWith("TCGA__LUAD.json")) return json(unsupported);
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
+    installFetch(unsupported);
 
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
-    await waitFor(() => expect(window.location.hash).not.toContain("pair="));
+    expect(await screen.findByRole("heading", { name: "Significant interactions" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.hash).not.toContain("pair=");
+      expect(window.location.hash).not.toContain("strict=");
+    });
+    expectFact("Significant ME", "0");
+    expectFact("Significant CO", "1");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("can rank and search comparison-only findings without inventing DIALECT evidence", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.type(await screen.findByRole("combobox", { name: "Cancer and cohort search" }), "lung");
-    await user.click(screen.getByText("Lung adenocarcinoma"));
-    await user.click(screen.getByRole("link", { name: "Compare" }));
-    expect(await screen.findByRole("heading", { name: "Compare the evidence." })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Fisher" }));
-    expect(await screen.findByText(/ALK_M \/ ROS1_M/)).toBeInTheDocument();
-    await user.type(screen.getByRole("searchbox", { name: "Search compared gene pairs" }), "ROS1");
-    expect(screen.getByText(/ALK_M \/ ROS1_M/)).toBeInTheDocument();
-    expect(screen.getAllByText("not tested").length).toBeGreaterThan(0);
-  });
-
-  it("only makes comparison pairs clickable when the active consensus view can resolve them", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.type(await screen.findByRole("combobox", { name: "Cancer and cohort search" }), "lung");
-    await user.click(screen.getByText("Lung adenocarcinoma"));
-    await user.click(screen.getByRole("link", { name: "Compare" }));
-    await user.click(await screen.findByRole("button", { name: "Fisher" }));
-
-    const cbaseOnly = await screen.findByText("BRAF_M / NRAS_M");
-    expect(cbaseOnly.closest("button")).toBeNull();
-    expect(screen.queryByRole("button", { name: "BRAF_M / NRAS_M" })).not.toBeInTheDocument();
-  });
-
-  it("does not make another BMR's comparison pair clickable in a single-model view", async () => {
+  it("sorts comparison evidence and opens any DIALECT-tested pair regardless of Explore mode", async () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=compare&cohort=TCGA__LUAD&mode=cbase&compare=ME",
+      "/#view=compare&cohort=TCGA__LUAD&mode=consensus&display=network&direction=all&compare=ME",
     );
     const user = userEvent.setup();
     render(<App />);
-    expect(
-      await screen.findByRole("button", { name: "BRAF_M / NRAS_M" }),
-    ).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "Fisher" }));
 
-    const cbaseOnly = await screen.findByText("BRAF_M / NRAS_M");
-    const digOnly = screen.getByText("CDKN2A_M / RB1_M");
-    expect(cbaseOnly.closest("button")).not.toBeNull();
-    expect(digOnly.closest("button")).toBeNull();
-    expect(screen.queryByRole("button", { name: "CDKN2A_M / RB1_M" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Compare methods" })).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    await user.click(screen.getByRole("button", { name: "Sort by Fisher" }));
+    const fisherHeader = screen.getByRole("columnheader", { name: /Fisher q/ });
+    expect(fisherHeader).toHaveAttribute("aria-sort", "ascending");
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent("ALK_M / ROS1_M");
+    expect(screen.queryByRole("button", { name: "ALK_M / ROS1_M" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sort by Fisher" }));
+    expect(fisherHeader).toHaveAttribute("aria-sort", "descending");
+    await user.click(screen.getAllByRole("button", { name: "BRAF_M / NRAS_M" })[0]);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Not significant under all 3 backgrounds")).toBeInTheDocument();
+    expect(screen.getByText(/1\/3 backgrounds agree on ME; 1\/3 meet/)).toBeInTheDocument();
+    expect(window.location.hash).toContain("pair=ME%3A%3ABRAF_M%3A%3ANRAS_M");
   });
 
-  it("labels CBaSE-backed MutSig cells in the comparison table", async () => {
+  it("shows an honest zero state and offers model recovery", async () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=compare&cohort=TCGA__LUAD&mode=mutsig&compare=ME",
+      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list&direction=all&compare=ME",
     );
-    const hybrid = structuredClone(cohort);
-    hybrid.testing_universes.models.mutsig.origins.cbase_fallback = ["TP53_M"];
-    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("manifest.json")) return json(manifest);
-      if (url.endsWith("index.json")) return json(index);
-      if (url.endsWith("TCGA__LUAD.json")) return json(hybrid);
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-
-    render(<App />);
-    const pair = await screen.findByRole("button", { name: "TP53_M / KRAS_M" });
-    const row = pair.closest("tr");
-    expect(row).not.toBeNull();
-    expect(within(row!).getByText("CBaSE fallback")).toBeInTheDocument();
-    expect(within(row!).getByText(/not a distinct MutSig lambda/)).toBeInTheDocument();
-  });
-
-  it("flags CBaSE-backed MutSig evidence and excludes it from consensus", async () => {
-    window.history.replaceState(
-      null,
-      "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=mutsig&compare=ME",
-    );
-    const hybrid = structuredClone(cohort);
-    hybrid.testing_universes.models.mutsig.origins.cbase_fallback = ["TP53_M"];
-    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("manifest.json")) return json(manifest);
-      if (url.endsWith("index.json")) return json(index);
-      if (url.endsWith("TCGA__LUAD.json")) return json(hybrid);
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-
+    const empty = structuredClone(cohort);
+    for (const model of Object.values(empty.models)) {
+      for (const row of model.rows) row[17] = 0.02;
+    }
+    installFetch(empty);
     const user = userEvent.setup();
     render(<App />);
-    expect(await screen.findAllByText(/CBaSE fallback/)).not.toHaveLength(0);
-    const resultButton = screen.getAllByText("TP53_M")[0].closest("button");
-    expect(resultButton).not.toBeNull();
-    await user.click(resultButton!);
-    expect(
-      await screen.findByText(/excluded from three-background consensus/),
-    ).toBeInTheDocument();
-  });
 
-  it("does not label fallback metadata when MutSig did not test the pair", async () => {
-    window.history.replaceState(
-      null,
-      "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=cbase&compare=ME",
-    );
-    const absent = structuredClone(cohort);
-    absent.testing_universes.models.mutsig.origins.cbase_fallback = ["TP53_M"];
-    absent.models.mutsig.rows = absent.models.mutsig.rows.filter(
-      (row) => !(row[0] === "TP53_M" && row[1] === "KRAS_M"),
-    );
-    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("manifest.json")) return json(manifest);
-      if (url.endsWith("index.json")) return json(index);
-      if (url.endsWith("TCGA__LUAD.json")) return json(absent);
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-
-    const user = userEvent.setup();
-    render(<App />);
-    expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
-    expect(screen.queryByText(/MutSig → CBaSE fallback/)).not.toBeInTheDocument();
-
-    const resultButton = screen.getAllByText("TP53_M")[0].closest("button");
-    expect(resultButton).not.toBeNull();
-    await user.click(resultButton!);
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByText(/CBaSE fallback/)).not.toBeInTheDocument();
-    expect(within(dialog).getByText("Not tested for this pair")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    await user.click(screen.getByRole("link", { name: "Compare" }));
-    const pair = await screen.findByRole("button", { name: "TP53_M / KRAS_M" });
-    const row = pair.closest("tr");
-    expect(row).not.toBeNull();
-    expect(within(row!).queryByText("CBaSE fallback")).not.toBeInTheDocument();
+    expect(await screen.findByText("No significant pairs in this view.")).toBeInTheDocument();
+    expectFact("Significant ME", "0");
+    expectFact("Significant CO", "0");
+    await user.click(screen.getByRole("button", { name: "Choose another model" }));
+    expect(await screen.findByRole("heading", { name: "Result definition" })).toBeInTheDocument();
+    expect(window.location.hash).toContain("settings=1");
   });
 });

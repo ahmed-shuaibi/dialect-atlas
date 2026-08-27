@@ -4,6 +4,8 @@ export type Bmr = (typeof BMR_IDS)[number];
 export type AtlasView = "explore" | "compare" | "about";
 export type AtlasMode = "consensus" | Bmr;
 export type Direction = "ME" | "CO";
+export type ExploreDirection = "all" | Direction;
+export type ExploreDisplay = "network" | "list";
 export type TransportDirection = Direction | "neutral";
 
 export interface CompactTable {
@@ -144,6 +146,7 @@ export interface AtlasUrlState {
   mode: AtlasMode;
   pair?: string;
   settings: boolean;
-  strict: boolean;
+  exploreDisplay: ExploreDisplay;
+  exploreDirection: ExploreDirection;
   compareDirection: Direction;
 }

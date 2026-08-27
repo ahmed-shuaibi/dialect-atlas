@@ -25,28 +25,34 @@ DialogDescription.displayName = "DialogDescription";
 
 export const DialogContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { variant?: "modal" | "drawer" }
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    variant?: "modal" | "wide" | "drawer";
+  }
 >(({ className, children, variant = "modal", ...props }, ref) => (
   <DialogPrimitive.Portal>
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/28 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out data-[state=open]:fade-in" />
+    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/28 backdrop-blur-[2px] duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out data-[state=open]:fade-in" />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 overflow-y-auto border border-line bg-paper text-ink outline-none",
+        "fixed z-50 overflow-x-hidden overflow-y-auto border border-line bg-paper text-ink outline-none duration-300 data-[state=closed]:animate-out data-[state=open]:animate-in",
         variant === "drawer"
-          ? "inset-y-0 right-0 w-[min(92vw,28rem)] rounded-l-[2rem] p-6 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
-          : "bottom-0 left-0 right-0 max-h-[92vh] rounded-t-[2rem] p-6 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[86vh] sm:w-[min(92vw,46rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[2rem] sm:p-8",
+          ? "inset-0 h-dvh w-full max-w-none border-0 p-6 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:inset-y-0 sm:left-auto sm:right-0 sm:h-auto sm:w-[min(92vw,28rem)] sm:border sm:border-y-0 sm:border-r-0 sm:p-7"
+          : variant === "wide"
+            ? "bottom-0 left-0 right-0 max-h-[96dvh] rounded-t-2xl p-5 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[92vh] sm:w-[min(96vw,72rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:p-7 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
+            : "bottom-0 left-0 right-0 max-h-[92vh] rounded-t-[2rem] p-6 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[86vh] sm:w-[min(92vw,46rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[2rem] sm:p-8 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
         className,
       )}
       {...props}
     >
+      <div className="pointer-events-none sticky top-0 z-30 flex h-0 justify-end">
+        <DialogPrimitive.Close
+          aria-label="Close"
+          className="focus-ring pointer-events-auto grid size-10 -translate-y-1 place-items-center rounded-full border border-line bg-paper/95 text-muted shadow-sm backdrop-blur transition-colors hover:bg-sand hover:text-ink"
+        >
+          <X className="size-5" aria-hidden />
+        </DialogPrimitive.Close>
+      </div>
       {children}
-      <DialogPrimitive.Close
-        aria-label="Close"
-        className="focus-ring absolute right-5 top-5 grid size-10 place-items-center rounded-full text-muted transition-colors hover:bg-sand hover:text-ink"
-      >
-        <X className="size-5" aria-hidden />
-      </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
 ));

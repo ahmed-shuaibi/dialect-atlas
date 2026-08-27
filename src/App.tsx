@@ -11,7 +11,12 @@ import { ExploreView, ResultsSkeleton } from "@/features/atlas/components/Explor
 import { PairDialog } from "@/features/atlas/components/PairDialog";
 import { SettingsDrawer } from "@/features/atlas/components/SettingsDrawer";
 import { useCohort, useRelease } from "@/features/atlas/hooks/useAtlas";
-import { findResultForMode, parsePairId } from "@/features/atlas/lib/atlas-transform";
+import {
+  findResult,
+  findResultForMode,
+  parsePairId,
+  resultsForMode,
+} from "@/features/atlas/lib/atlas-transform";
 import type { InteractionResult } from "@/features/atlas/types";
 import { useHashState } from "@/lib/useHashState";
 
@@ -62,10 +67,27 @@ export function App() {
   const selectedResult = useMemo(
     () =>
       cohort.data && selection
-        ? findResultForMode(cohort.data, selection, url.mode, url.strict)
+        ? url.view === "compare"
+          ? findResult(cohort.data, selection)
+          : findResultForMode(cohort.data, selection, url.mode)
         : null,
-    [cohort.data, selection, url.mode, url.strict],
+    [cohort.data, selection, url.mode, url.view],
   );
+  const significantCounts = useMemo(
+    () =>
+      cohort.data
+        ? {
+            me: resultsForMode(cohort.data, url.mode, "ME").length,
+            co: resultsForMode(cohort.data, url.mode, "CO").length,
+          }
+        : { me: null, co: null },
+    [cohort.data, url.mode],
+  );
+
+  useEffect(() => {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [url.cohort, url.view]);
 
   useEffect(() => {
     if (url.pair && cohort.status === "ready" && !selectedResult) {
@@ -110,16 +132,15 @@ export function App() {
                 cohort={cohortMeta}
                 cohorts={release.data.index.cohorts}
                 mode={url.mode}
-                strict={url.strict}
                 onCohortChange={chooseCohort}
+                significantMeCount={significantCounts.me}
+                significantCoCount={significantCounts.co}
                 settings={
                   <SettingsDrawer
                     open={url.settings}
                     mode={url.mode}
-                    strict={url.strict}
                     onOpenChange={(settings) => setUrl({ settings }, { replace: !settings })}
                     onModeChange={(mode) => setUrl({ mode, pair: undefined })}
-                    onStrictChange={(strict) => setUrl({ strict, pair: undefined })}
                   />
                 }
               />
@@ -129,7 +150,18 @@ export function App() {
                 <ErrorState title="Cohort data unavailable" error={cohort.error} onRetry={cohort.retry} />
               )}
               {cohort.data && url.view === "explore" && (
-                <ExploreView data={cohort.data} mode={url.mode} strict={url.strict} onSelect={selectPair} />
+                <ExploreView
+                  data={cohort.data}
+                  mode={url.mode}
+                  display={url.exploreDisplay}
+                  direction={url.exploreDirection}
+                  onDisplayChange={(exploreDisplay) => setUrl({ exploreDisplay })}
+                  onDirectionChange={(exploreDirection) =>
+                    setUrl({ exploreDirection, pair: undefined })
+                  }
+                  onOpenSettings={() => setUrl({ settings: true })}
+                  onSelect={selectPair}
+                />
               )}
               {cohort.data && url.view === "compare" && (
                 <CompareView
@@ -137,7 +169,6 @@ export function App() {
                   manifestMethods={release.data.manifest.methods}
                   mode={url.mode}
                   direction={url.compareDirection}
-                  strict={url.strict}
                   onDirectionChange={(compareDirection) => setUrl({ compareDirection, pair: undefined })}
                   onSelect={selectPair}
                 />

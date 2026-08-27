@@ -1,15 +1,21 @@
 # DIALECT Atlas
 
-The interactive companion to DIALECT, a latent-variable method for evaluating
-mutual exclusivity and co-occurrence between somatic gene-effect pairs in cancer.
+The visual companion to DIALECT, a latent-variable method for evaluating mutual
+exclusivity and co-occurrence between somatic gene-effect pairs in cancer.
 
 [Explore the Atlas](https://ahmed-shuaibi.github.io/dialect-atlas/)
 
+Choose a cancer type and cohort, then explore significant interactions as a
+network or compact ranked list. The default view requires the same pair and
+direction at `q < 0.01` under CBaSE, DIG, and a real MutSigCV2 background;
+CBaSE fallback features are not counted as MutSigCV2 support. Individual BMR
+views and Fisher, DISCOVER, MEGSA, WeSME, and WeSCO comparisons are available
+without crowding the primary view.
+
 The published `k100-2026-08-26` release contains every evaluated pair from up
 to 100 count-ranked, provider-eligible features in each of 71 TCGA, MSK-IMPACT,
-and MSK-CHORD cohorts under CBaSE, DIG, and MutSigCV2 background-mutation-rate
-models. It also includes Fisher, DISCOVER, MEGSA, WeSME, and WeSCO comparison
-results. Every data file is immutable and SHA-256 verified during deployment.
+and MSK-CHORD cohorts. Every release file is immutable and SHA-256 verified
+during deployment.
 
 ## Local development
 
@@ -17,6 +23,13 @@ results. Every data file is immutable and SHA-256 verified during deployment.
 npm ci
 npm run check
 npm run dev
+```
+
+The production build keeps the current GitHub Pages subpath and canonical URL
+by default. Build for a custom domain at the site root with:
+
+```bash
+ATLAS_BASE_PATH=/ ATLAS_SITE_URL=https://example.org npm run build
 ```
 
 The release schema, provenance, thresholds, and field definitions are documented

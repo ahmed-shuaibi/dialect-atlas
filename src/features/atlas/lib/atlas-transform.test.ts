@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   consensusResults,
+  exploreResults,
+  filterResultsByGene,
   findResultForMode,
+  isSignificant,
   lrtEvidence,
+  modelAgreement,
   modelResults,
+  resultQ,
 } from "@/features/atlas/lib/atlas-transform";
 import type { Bmr, CohortData, DialectRow, TransportDirection } from "@/features/atlas/types";
 
@@ -32,7 +37,7 @@ function dialectRow(
     lrt: direction === "CO" ? 8 : 2,
     wald: null,
     p: 0.01,
-    q: 0.02,
+    q: 0.001,
     direction,
     rank,
     tauMass: 1,
@@ -81,9 +86,8 @@ describe("Atlas interaction ranking", () => {
     });
 
     const consensus = consensusResults(cohort, "ME");
-    expect(consensus.map((result) => result.ga)).toEqual(["C_M", "A_M"]);
-    expect(consensus[1].fdrSupport).toBe(2);
-    expect(consensusResults(cohort, "ME", true).map((result) => result.ga)).toEqual(["C_M"]);
+    expect(consensus.map((result) => result.ga)).toEqual(["C_M"]);
+    expect(consensus[0].fdrSupport).toBe(3);
   });
 
   it("follows stored direction-specific ranks and ignores neutral rows", () => {
@@ -210,14 +214,13 @@ describe("Atlas interaction ranking", () => {
     );
 
     expect(consensusResults(cohort, "ME")).toEqual([]);
-    expect(consensusResults(cohort, "ME", true)).toEqual([]);
+    expect(consensusResults(cohort, "ME")).toEqual([]);
     expect(modelResults(cohort, "mutsig", "ME")).toHaveLength(1);
     expect(
       findResultForMode(
         cohort,
         { direction: "ME", ga: "A_M", gb: "B_M" },
         "consensus",
-        false,
       ),
     ).toBeNull();
     expect(
@@ -225,7 +228,6 @@ describe("Atlas interaction ranking", () => {
         cohort,
         { direction: "ME", ga: "A_M", gb: "B_M" },
         "mutsig",
-        false,
       ),
     ).not.toBeNull();
   });
@@ -249,22 +251,82 @@ describe("Atlas interaction ranking", () => {
     );
     const cohort = data({ cbase: rows, dig: [...rows], mutsig: [...rows] });
     const start = performance.now();
-    const results = consensusResults(cohort, "ME", true);
+    const results = consensusResults(cohort, "ME");
     const elapsed = performance.now() - start;
     expect(results).toHaveLength(count);
     expect(elapsed).toBeLessThan(1500);
   });
 
-  it("does not resolve pair links outside the selected model or strict view", () => {
+  it("does not resolve pair links outside the selected significant model view", () => {
     const pair = { direction: "ME" as const, ga: "A_M", gb: "B_M" };
     const cohort = data({
       cbase: [dialectRow("A_M", "B_M", "ME", 1, { q: 0.001 })],
       dig: [],
       mutsig: [],
     });
-    expect(findResultForMode(cohort, pair, "cbase", false)).not.toBeNull();
-    expect(findResultForMode(cohort, pair, "dig", false)).toBeNull();
-    expect(findResultForMode(cohort, pair, "consensus", false)).toBeNull();
-    expect(findResultForMode(cohort, pair, "cbase", true)).toBeNull();
+    expect(findResultForMode(cohort, pair, "cbase")).not.toBeNull();
+    expect(findResultForMode(cohort, pair, "dig")).toBeNull();
+    expect(findResultForMode(cohort, pair, "consensus")).toBeNull();
+  });
+
+  it("uses the strict q < 0.01 boundary and excludes missing q values", () => {
+    const cohort = data({
+      cbase: [
+        dialectRow("PASS_M", "A_N", "ME", 1, { q: 0.009999 }),
+        dialectRow("BOUNDARY_M", "B_N", "ME", 2, { q: 0.01 }),
+        dialectRow("MISSING_M", "C_N", "ME", 3, { q: null }),
+      ],
+      dig: [],
+      mutsig: [],
+    });
+
+    expect(isSignificant({ q: 0.009999 })).toBe(true);
+    expect(isSignificant({ q: 0.01 })).toBe(false);
+    expect(isSignificant({ q: null })).toBe(false);
+    expect(modelResults(cohort, "cbase", "ME").map(({ ga }) => ga)).toEqual(["PASS_M"]);
+  });
+
+  it("requires same-direction significance under every model for consensus", () => {
+    const cbase = dialectRow("A_M", "B_N", "ME", 1, { q: 0.001 });
+    const cohort = data({
+      cbase: [cbase],
+      dig: [dialectRow("B_N", "A_M", "CO", 1, { q: 0.001 })],
+      mutsig: [dialectRow("A_M", "B_N", "ME", 1, { q: 0.001 })],
+    });
+    expect(consensusResults(cohort, "ME")).toEqual([]);
+    expect(modelResults(cohort, "cbase", "ME")).toHaveLength(1);
+    expect(modelResults(cohort, "dig", "CO")).toHaveLength(1);
+  });
+
+  it("uses the selected model's q and exposes distinct model agreement", () => {
+    const cohort = data({
+      cbase: [dialectRow("A_M", "B_N", "ME", 1, { q: 0.002 })],
+      dig: [dialectRow("A_M", "B_N", "ME", 2, { q: 0.008 })],
+      mutsig: [dialectRow("A_M", "B_N", "ME", 3, { q: 0.02 })],
+    });
+    const [result] = modelResults(cohort, "dig", "ME");
+    expect(result.representative.rank).toBe(2);
+    expect(resultQ(result, "dig")).toBe(0.008);
+    expect(modelAgreement(result)).toBe(2);
+    expect(modelResults(cohort, "mutsig", "ME")).toEqual([]);
+  });
+
+  it("gives network and list consumers one complete result set", () => {
+    const cohort = data({
+      cbase: [
+        dialectRow("A_M", "B_N", "ME", 1),
+        dialectRow("TP53_M", "KRAS_M", "CO", 1),
+      ],
+      dig: [],
+      mutsig: [],
+    });
+    const results = exploreResults(cohort, "cbase", "all");
+    expect(results.map(({ id }) => id)).toEqual([
+      "ME::A_M::B_N",
+      "CO::KRAS_M::TP53_M",
+    ]);
+    expect(filterResultsByGene(results, "tp53").map(({ id }) => id)).toEqual([
+      "CO::KRAS_M::TP53_M",
+    ]);
   });
 });

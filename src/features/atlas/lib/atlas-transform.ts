@@ -5,6 +5,7 @@ import {
   type CohortData,
   type DialectRow,
   type Direction,
+  type ExploreDirection,
   type InteractionResult,
   type ModelMatch,
   type PairEvidence,
@@ -47,6 +48,9 @@ export function parsePairId(value: string | undefined): PairSelection | null {
 
 export const isSameBaseGene = (row: Pick<DialectRow, "ga" | "gb">) =>
   baseGene(row.ga) === baseGene(row.gb);
+
+export const isSignificant = (row: Pick<DialectRow, "q">): boolean =>
+  row.q != null && row.q < 0.01;
 
 /** Negative fitted LRT values carry zero evidence under the release contract. */
 export const lrtEvidence = (row: Pick<DialectRow, "lrt">) => Math.max(0, row.lrt);
@@ -182,10 +186,11 @@ function toResult(data: CohortData, representative: DialectRow & { direction: Di
 }
 
 /**
- * Exact three-BMR consensus: same gene-effect pair and direction in all models. Results are
- * ordered conservatively by the worst directional rank percentile, then the median percentile.
+ * Significant three-BMR consensus: the exact gene-effect pair has the same direction and
+ * q < 0.01 under CBaSE, DIG, and a real MutSigCV2 background. Results are ordered
+ * conservatively by the worst directional rank percentile, then the median percentile.
  */
-export function consensusResults(data: CohortData, direction: Direction, strict = false): InteractionResult[] {
+export function consensusResults(data: CohortData, direction: Direction): InteractionResult[] {
   const seen = new Set<string>();
   const results: InteractionResult[] = [];
   for (const row of data.models.cbase) {
@@ -196,7 +201,7 @@ export function consensusResults(data: CohortData, direction: Direction, strict 
     seen.add(id);
     const result = toResult(data, row as DialectRow & { direction: Direction });
     if (result.matches.length !== BMR_IDS.length) continue;
-    if (strict && result.fdrSupport !== BMR_IDS.length) continue;
+    if (!result.matches.every(({ row: match }) => isSignificant(match))) continue;
     results.push(result);
   }
   return results.sort(
@@ -211,13 +216,16 @@ export function modelResults(
   data: CohortData,
   bmr: Bmr,
   direction: Direction,
-  strict = false,
 ): InteractionResult[] {
   const results = data.models[bmr]
     .filter((row): row is DialectRow & { direction: Direction } => isDirection(row))
-    .filter((row) => row.direction === direction && !isSameBaseGene(row))
-    .map((row) => toResult(data, row))
-    .filter((result) => !strict || result.fdrSupport === BMR_IDS.length);
+    .filter(
+      (row) =>
+        row.direction === direction &&
+        !isSameBaseGene(row) &&
+        isSignificant(row),
+    )
+    .map((row) => toResult(data, row));
 
   return results.sort(
     (a, b) =>
@@ -229,11 +237,57 @@ export function resultsForMode(
   data: CohortData,
   mode: AtlasMode,
   direction: Direction,
-  strict = false,
 ): InteractionResult[] {
   return mode === "consensus"
-    ? consensusResults(data, direction, strict)
-    : modelResults(data, mode, direction, strict);
+    ? consensusResults(data, direction)
+    : modelResults(data, mode, direction);
+}
+
+/** The exact significant result set shared by Explore's network and list renderers. */
+export function exploreResults(
+  data: CohortData,
+  mode: AtlasMode,
+  direction: ExploreDirection,
+): InteractionResult[] {
+  if (direction === "ME" || direction === "CO") {
+    return resultsForMode(data, mode, direction);
+  }
+  return [
+    ...resultsForMode(data, mode, "ME"),
+    ...resultsForMode(data, mode, "CO"),
+  ];
+}
+
+export function filterResultsByGene(
+  results: InteractionResult[],
+  query: string,
+): InteractionResult[] {
+  const needle = query.trim().toLocaleUpperCase("en-US");
+  if (!needle) return results;
+  return results.filter(
+    ({ ga, gb }) =>
+      ga.toLocaleUpperCase("en-US").includes(needle) ||
+      gb.toLocaleUpperCase("en-US").includes(needle) ||
+      baseGene(ga).toLocaleUpperCase("en-US").includes(needle) ||
+      baseGene(gb).toLocaleUpperCase("en-US").includes(needle),
+  );
+}
+
+/** The q-value that controls an interaction's visible significance encoding. */
+export function resultQ(result: InteractionResult, mode: AtlasMode): number {
+  if (mode !== "consensus") {
+    return result.matches.find(({ bmr }) => bmr === mode)?.row.q ?? 1;
+  }
+  return Math.max(...result.matches.map(({ row }) => row.q ?? 1));
+}
+
+/** Number of distinct background models supporting the result at q < 0.01. */
+export function modelAgreement(result: InteractionResult): number {
+  return result.matches.filter(
+    ({ bmr, row }) =>
+      isSignificant(row) &&
+      !(bmr === "mutsig" && result.mutsigFallbackFeatures.length > 0),
+  ).length;
 }
 
 export function findResult(data: CohortData, selection: PairSelection): InteractionResult | null {
@@ -250,18 +304,17 @@ export function findResultForMode(
   data: CohortData,
   selection: PairSelection,
   mode: AtlasMode,
-  strict: boolean,
 ): InteractionResult | null {
-  const result = findResult(data, selection);
-  if (!result || isSameBaseGene(result)) return null;
-  if (strict && result.fdrSupport !== BMR_IDS.length) return null;
   if (mode === "consensus") {
-    return result.matches.length === BMR_IDS.length &&
-      mutsigFallbackForPair(data, result.ga, result.gb).length === 0
-      ? result
-      : null;
+    return consensusResults(data, selection.direction).find(
+      ({ id }) => id === resultId(selection.direction, selection.ga, selection.gb),
+    ) ?? null;
   }
-  return result.matches.some((match) => match.bmr === mode) ? result : null;
+  const row = cohortIndexes(data).byModel[mode].get(
+    resultId(selection.direction, selection.ga, selection.gb),
+  );
+  if (!row || !isDirection(row) || isSameBaseGene(row) || !isSignificant(row)) return null;
+  return toResult(data, row);
 }
 
 export const fmtInt = (value: number) => value.toLocaleString("en-US");
