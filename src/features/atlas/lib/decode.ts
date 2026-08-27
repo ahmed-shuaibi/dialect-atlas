@@ -6,8 +6,10 @@ import {
   type CohortMeta,
   type CompactTable,
   type DialectRow,
+  type LikelyPassengerAnnotations,
   type ReleaseIndex,
   type ReleaseManifest,
+  type ManifestMethodId,
   type TransportDirection,
 } from "@/features/atlas/types";
 
@@ -38,9 +40,10 @@ function boolean(value: unknown, label: string): boolean {
 }
 
 function number(value: unknown, label: string): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsed)) throw new DataContractError(`${label} must be a finite number`);
-  return parsed;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new DataContractError(`${label} must be a finite number`);
+  }
+  return value;
 }
 
 function nullableNumber(value: unknown, label: string): number | null {
@@ -91,15 +94,57 @@ function direction(value: unknown, label: string): TransportDirection {
 
 export function decodeManifest(value: unknown): ReleaseManifest {
   const rec = object(value, "manifest");
+  const coverage = object(rec.coverage, "manifest.coverage");
+  const analysis = object(rec.analysis, "manifest.analysis");
+  const methodRecord = object(rec.methods, "manifest.methods");
+  const methodIds: ManifestMethodId[] = [
+    "dialect",
+    "fisher",
+    "discover",
+    "megsa",
+    "wesme_wesco",
+  ];
+  const methods = Object.fromEntries(methodIds.map((methodId) => {
+    const method = object(methodRecord[methodId], `manifest.methods.${methodId}`);
+    if (!Array.isArray(method.directions)) {
+      throw new DataContractError(`manifest.methods.${methodId}.directions must be an array`);
+    }
+    return [methodId, {
+      directions: method.directions.map((item, index) =>
+        direction(item, `manifest.methods.${methodId}.directions[${index}]`),
+      ).filter((item): item is "ME" | "CO" => item !== "neutral"),
+    }];
+  })) as ReleaseManifest["methods"];
+  if (!Array.isArray(rec.bmrs)) throw new DataContractError("manifest.bmrs must be an array");
   return {
     release_id: string(rec.release_id, "manifest.release_id"),
     schema_version: string(rec.schema_version, "manifest.schema_version"),
     immutable: boolean(rec.immutable, "manifest.immutable"),
     generated_at: string(rec.generated_at, "manifest.generated_at"),
-    coverage: rec.coverage,
-    analysis: rec.analysis,
-    bmrs: rec.bmrs,
-    methods: rec.methods,
+    coverage: {
+      cohorts: number(coverage.cohorts, "manifest.coverage.cohorts"),
+      samples: number(coverage.samples, "manifest.coverage.samples"),
+    },
+    analysis: {
+      top_k_event_features: number(
+        analysis.top_k_event_features,
+        "manifest.analysis.top_k_event_features",
+      ),
+      fdr_threshold: number(analysis.fdr_threshold, "manifest.analysis.fdr_threshold"),
+    },
+    bmrs: rec.bmrs.map((item, index) => {
+      const bmr = object(item, `manifest.bmrs[${index}]`);
+      const id = string(bmr.id, `manifest.bmrs[${index}].id`);
+      if (!BMR_IDS.includes(id as Bmr)) {
+        throw new DataContractError(`manifest.bmrs[${index}].id must be a known background`);
+      }
+      return {
+        id: id as Bmr,
+        label: string(bmr.label, `manifest.bmrs[${index}].label`),
+        role: string(bmr.role, `manifest.bmrs[${index}].role`),
+      };
+    }),
+    methods,
     index_file: string(rec.index_file, "manifest.index_file"),
     readme_file: string(rec.readme_file, "manifest.readme_file"),
     readme_sha256: string(rec.readme_sha256, "manifest.readme_sha256"),
@@ -130,6 +175,62 @@ export function decodeIndex(value: unknown): ReleaseIndex {
   return {
     release_id: string(rec.release_id, "index.release_id"),
     cohorts: rec.cohorts.map(decodeCohortMeta),
+  };
+}
+
+export function decodeLikelyPassengerAnnotations(
+  value: unknown,
+): LikelyPassengerAnnotations {
+  const rec = object(value, "likely-passenger annotations");
+  const cohortRecord = object(rec.cohorts, "likely-passenger annotations.cohorts");
+  const annotationId = string(
+    rec.annotation_id,
+    "likely-passenger annotations.annotation_id",
+  );
+  const schemaVersion = string(
+    rec.schema_version,
+    "likely-passenger annotations.schema_version",
+  );
+  const driverReferenceSha256 = string(
+    rec.driver_reference_sha256,
+    "likely-passenger annotations.driver_reference_sha256",
+  );
+  if (annotationId !== "likely-passengers-v1" || schemaVersion !== "1.0.0") {
+    throw new DataContractError("likely-passenger annotation version is unsupported");
+  }
+  if (!/^[a-f0-9]{64}$/.test(driverReferenceSha256)) {
+    throw new DataContractError(
+      "likely-passenger annotations.driver_reference_sha256 must be SHA-256",
+    );
+  }
+  return {
+    annotation_id: annotationId,
+    schema_version: schemaVersion,
+    definition: string(rec.definition, "likely-passenger annotations.definition"),
+    driver_reference: string(
+      rec.driver_reference,
+      "likely-passenger annotations.driver_reference",
+    ),
+    driver_reference_sha256: driverReferenceSha256,
+    cohorts: Object.fromEntries(
+      Object.entries(cohortRecord).map(([cohortId, value]) => {
+        const features = stringArray(
+          value,
+          `likely-passenger annotations.cohorts.${cohortId}`,
+        );
+        if (
+          features.length === 0 ||
+          features.length > 100 ||
+          features.length !== new Set(features).size ||
+          features.some((feature) => !/^[A-Za-z0-9][A-Za-z0-9._-]*_[MN]$/.test(feature))
+        ) {
+          throw new DataContractError(
+            `likely-passenger annotations.cohorts.${cohortId} is invalid`,
+          );
+        }
+        return [cohortId, features];
+      }),
+    ),
   };
 }
 

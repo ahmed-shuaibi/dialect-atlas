@@ -99,7 +99,8 @@ describe("InteractionNetwork controlled behavior", () => {
         totalResults={1}
         mode="cbase"
         qThreshold={0.01}
-        query=""
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={vi.fn()}
       />,
     );
@@ -117,7 +118,8 @@ describe("InteractionNetwork controlled behavior", () => {
         totalResults={1}
         mode="cbase"
         qThreshold={0.01}
-        query=""
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={vi.fn()}
       />,
     );

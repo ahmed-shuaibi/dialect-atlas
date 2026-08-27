@@ -34,7 +34,14 @@ describe("InteractionList", () => {
     const user = userEvent.setup();
     const results = Array.from({ length: 150 }, (_, index) => result(index));
     const { container } = render(
-      <InteractionList results={results} mode="cbase" qThreshold={0.01} onSelect={() => undefined} />,
+      <InteractionList
+        results={results}
+        mode="cbase"
+        qThreshold={0.01}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
+        onSelect={() => undefined}
+      />,
     );
     expect(screen.getByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();

@@ -1,9 +1,15 @@
-import { decodeCohort, decodeIndex, decodeManifest } from "@/features/atlas/lib/decode";
+import {
+  decodeCohort,
+  decodeIndex,
+  decodeLikelyPassengerAnnotations,
+  decodeManifest,
+} from "@/features/atlas/lib/decode";
 import type { CohortData, CohortMeta, ReleaseBundle } from "@/features/atlas/types";
 
 export const RELEASE_SLUG = "k100-2026-08-26";
 export const RELEASE_SCHEMA_VERSION = "2.0.0";
 export const RELEASE_ROOT = `${import.meta.env.BASE_URL}data/releases/${RELEASE_SLUG}/`;
+export const LIKELY_PASSENGERS_URL = `${import.meta.env.BASE_URL}data/annotations/likely-passengers-v1.json`;
 const COHORT_CACHE_LIMIT = 3;
 
 let releaseValue: ReleaseBundle | null = null;
@@ -39,13 +45,22 @@ export async function loadRelease(): Promise<ReleaseBundle> {
       );
     }
     const indexUrl = `${RELEASE_ROOT}${relative(manifest.index_file)}`;
-    const index = decodeIndex(await fetchJson(indexUrl));
+    const [index, likelyPassengers] = await Promise.all([
+      fetchJson(indexUrl).then(decodeIndex),
+      fetchJson(LIKELY_PASSENGERS_URL).then(decodeLikelyPassengerAnnotations),
+    ]);
     if (index.release_id !== manifest.release_id) {
       throw new Error(
         `Release mismatch: manifest ${manifest.release_id}, index ${index.release_id}`,
       );
     }
-    const bundle = { manifest, index };
+    const missingAnnotations = index.cohorts
+      .map(({ id }) => id)
+      .filter((id) => likelyPassengers.cohorts[id] == null);
+    if (missingAnnotations.length > 0) {
+      throw new Error(`Missing likely-passenger annotations: ${missingAnnotations.join(", ")}`);
+    }
+    const bundle = { manifest, index, likelyPassengers };
     releaseValue = bundle;
     return bundle;
   })().catch((error) => {

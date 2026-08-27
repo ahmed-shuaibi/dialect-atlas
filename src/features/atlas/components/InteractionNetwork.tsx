@@ -2,50 +2,34 @@ import "@xyflow/react/dist/style.css";
 import {
   applyEdgeChanges,
   applyNodeChanges,
-  Handle,
   Panel,
-  Position,
   ReactFlow,
   useNodesInitialized,
   useReactFlow,
   type AriaLabelConfig,
-  type Edge,
   type EdgeChange,
-  type Node,
   type NodeChange,
-  type NodeProps,
   type OnSelectionChangeParams,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Maximize2, Minus, Move, Plus, RotateCcw } from "lucide-react";
+import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ui/theme";
-import { resultEffectText } from "@/features/atlas/components/explore-display";
+import { NETWORK_NODE_TYPES, effectLabel } from "@/features/atlas/components/network/GeneNode";
+import { NetworkInspector } from "@/features/atlas/components/network/NetworkInspector";
+import { NetworkLegend } from "@/features/atlas/components/network/NetworkLegend";
+import type {
+  GeneNode,
+  Inspection,
+  ResultEdge,
+} from "@/features/atlas/components/network/types";
 import { buildNetworkLayout } from "@/features/atlas/components/network-layout";
 import {
-  baseGene,
   fmtQ,
-  modelAgreement,
   resultIsSignificant,
 } from "@/features/atlas/lib/atlas-transform";
 import type { AtlasMode, InteractionResult } from "@/features/atlas/types";
-import { cn } from "@/lib/utils";
-
-type GeneNodeData = {
-  label: string;
-  gene: string;
-  effect: "M" | "N" | null;
-  shownDegree: number;
-  meCount: number;
-  coCount: number;
-  active: boolean;
-  dimmed: boolean;
-};
-
-type GeneNode = Node<GeneNodeData, "gene">;
-type ResultEdge = Edge<{ q: number; resultId: string }, "straight">;
-type Inspection = { kind: "node" | "edge"; id: string } | null;
 
 const FIT_OPTIONS = { padding: 0.14, minZoom: 0.2, maxZoom: 1.2 };
 const NETWORK_ARIA_LABEL_CONFIG = {
@@ -55,31 +39,6 @@ const NETWORK_ARIA_LABEL_CONFIG = {
   "edge.a11yDescription.default":
     "Press Enter or Space to select an interaction and open its pair details. Press Escape to clear the selection.",
 } satisfies Partial<AriaLabelConfig>;
-
-function effectLabel(effect: GeneNodeData["effect"]): string {
-  if (effect === "M") return "Missense effect";
-  if (effect === "N") return "Nonsense effect";
-  return "Gene effect";
-}
-
-function GeneNodeView({ data, selected }: NodeProps<GeneNode>) {
-  return (
-    <div
-      className={cn(
-        "network-gene-node min-w-[96px] rounded-full border border-line bg-[var(--network-node)] px-4 py-2.5 text-center font-mono text-[15px] font-medium text-ink shadow-sm transition-[border-color,box-shadow,opacity,transform]",
-        (data.active || selected) && "border-brand shadow-[0_0_0_4px_var(--brand-soft)]",
-        data.dimmed && "opacity-35",
-      )}
-    >
-      <Handle type="target" position={Position.Left} style={{ width: 0, height: 0, border: 0, background: "transparent" }} />
-      <span>{data.label}</span>
-      {data.effect && <span className="ml-1 text-[10px] text-muted">{data.effect}</span>}
-      <Handle type="source" position={Position.Right} style={{ width: 0, height: 0, border: 0, background: "transparent" }} />
-    </div>
-  );
-}
-
-const NODE_TYPES = { gene: GeneNodeView };
 
 function FitNetwork({ trigger }: { trigger: string }) {
   const initialized = useNodesInitialized();
@@ -109,14 +68,16 @@ export function InteractionNetwork({
   totalResults,
   mode,
   qThreshold,
-  query,
+  likelyPassengers,
+  highlightLikelyPassengers,
   onSelect,
 }: {
   results: InteractionResult[];
   totalResults: number;
   mode: AtlasMode;
   qThreshold: number;
-  query: string;
+  likelyPassengers: ReadonlySet<string>;
+  highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
 }) {
   const { theme } = useTheme();
@@ -153,6 +114,7 @@ export function InteractionNetwork({
             shownDegree: node.shownDegree,
             meCount: counts.ME,
             coCount: counts.CO,
+            likelyPassenger: highlightLikelyPassengers && likelyPassengers.has(node.id),
             active: false,
             dimmed: false,
           },
@@ -160,10 +122,10 @@ export function InteractionNetwork({
           selectable: true,
           focusable: true,
           deletable: false,
-          ariaLabel: `${node.gene}; ${effectLabel(node.effect)}; ${node.shownDegree} ${node.shownDegree === 1 ? "connection" : "connections"} shown`,
+          ariaLabel: `${node.gene}; ${effectLabel(node.effect)}; ${node.shownDegree} ${node.shownDegree === 1 ? "connection" : "connections"} shown${highlightLikelyPassengers && likelyPassengers.has(node.id) ? "; likely passenger gene effect" : ""}`,
         };
       }),
-    [directionCounts, layout.nodes],
+    [directionCounts, highlightLikelyPassengers, layout.nodes, likelyPassengers],
   );
   const initialEdges = useMemo<ResultEdge[]>(
     () =>
@@ -200,9 +162,7 @@ export function InteractionNetwork({
     setHovered(null);
     setSelected(null);
     setLayoutDirty(false);
-    const frame = window.requestAnimationFrame(() => void instance?.fitView(FIT_OPTIONS));
-    return () => window.cancelAnimationFrame(frame);
-  }, [initialEdges, initialNodes, instance]);
+  }, [initialEdges, initialNodes]);
 
   const onNodesChange = useCallback((changes: NodeChange<GeneNode>[]) => {
     if (
@@ -232,7 +192,6 @@ export function InteractionNetwork({
     [],
   );
 
-  const needle = query.trim().toLocaleUpperCase("en-US");
   const inspectedNode = inspection?.kind === "node" ? inspection.id : null;
   const inspectedEdge = inspection?.kind === "edge" ? inspection.id : null;
   const inspectedResult = inspectedEdge ? resultById.get(inspectedEdge) ?? null : null;
@@ -249,7 +208,6 @@ export function InteractionNetwork({
   const displayedNodes = useMemo(
     () =>
       nodes.map((node) => {
-        const queryMatch = !needle || node.id.toLocaleUpperCase("en-US").includes(needle);
         const edgeMatch = inspectedResult
           ? node.id === inspectedResult.ga || node.id === inspectedResult.gb
           : true;
@@ -261,31 +219,31 @@ export function InteractionNetwork({
             active:
               node.id === inspectedNode ||
               (inspectedResult != null && (node.id === inspectedResult.ga || node.id === inspectedResult.gb)),
-            dimmed: !queryMatch || !edgeMatch || !neighborhoodMatch,
+            dimmed: !edgeMatch || !neighborhoodMatch,
           },
         };
       }),
-    [connectedNodeIds, inspectedNode, inspectedResult, needle, nodes],
+    [connectedNodeIds, inspectedNode, inspectedResult, nodes],
   );
   const displayedEdges = useMemo(
     () =>
       edges.map((edge) => {
-        const queryMatch =
-          !needle ||
-          edge.source.toLocaleUpperCase("en-US").includes(needle) ||
-          edge.target.toLocaleUpperCase("en-US").includes(needle);
-        const nodeMatch = inspectedNode ? edge.source === inspectedNode || edge.target === inspectedNode : true;
+        const inspectionMatch = inspectedNode
+          ? edge.source === inspectedNode || edge.target === inspectedNode
+          : inspectedEdge
+            ? edge.id === inspectedEdge
+            : true;
         const active = edge.id === inspectedEdge;
         return {
           ...edge,
           style: {
             ...edge.style,
-            opacity: queryMatch && nodeMatch ? (active ? 1 : 0.78) : 0.12,
+            opacity: inspectionMatch ? (active ? 1 : 0.78) : 0.12,
             strokeWidth: Number(edge.style?.strokeWidth ?? 1.5) + (active ? 1.5 : 0),
           },
         };
       }),
-    [edges, inspectedEdge, inspectedNode, needle],
+    [edges, inspectedEdge, inspectedNode],
   );
 
   const inspectedNodeData = inspectedNode
@@ -328,18 +286,19 @@ export function InteractionNetwork({
 
   return (
     <section aria-label="Interaction network" onKeyDownCapture={onNetworkKeyDown}>
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-muted">
-        <span className="inline-flex items-center gap-2"><span className="w-6 border-t-2 border-me" aria-hidden />ME</span>
-        <span className="inline-flex items-center gap-2"><span className="w-6 border-t-2 border-dashed border-co" aria-hidden />CO</span>
-        <span className="inline-flex items-center gap-1.5"><Move className="size-4" aria-hidden />Drag nodes</span>
-        <span className="ml-auto font-mono text-xs">{meCount} ME + {coCount} CO{totalResults > results.length ? ` of ${totalResults}` : ""}</span>
-      </div>
+      <NetworkLegend
+        meCount={meCount}
+        coCount={coCount}
+        totalResults={totalResults}
+        shownResults={results.length}
+        showLikelyPassengers={highlightLikelyPassengers}
+      />
 
       <div className="surface-card h-[min(68vh,720px)] min-h-[31rem] overflow-hidden bg-paper">
         <ReactFlow<GeneNode, ResultEdge>
           nodes={displayedNodes}
           edges={displayedEdges}
-          nodeTypes={NODE_TYPES}
+          nodeTypes={NETWORK_NODE_TYPES}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onSelectionChange={onSelectionChange}
@@ -374,47 +333,27 @@ export function InteractionNetwork({
         >
           <FitNetwork trigger={`${mode}:${qThreshold}:${results.map(({ id }) => id).join("|")}:${fitRevision}`} />
           {inspection && (
-            <Panel position="top-left" className="m-4 max-w-[min(22rem,calc(100vw-5rem))]">
-              <div className="rounded-[20px] border border-line bg-paper/95 p-4 text-ink shadow-soft backdrop-blur" role="status" aria-live="polite">
-                {inspectedNodeData ? (
-                  <>
-                    <p className="font-mono text-base font-semibold">{inspectedNodeData.gene}</p>
-                    <p className="mt-1 text-sm text-muted">{effectLabel(inspectedNodeData.effect)}</p>
-                    <p className="mt-3 text-sm font-medium">
-                      {inspectedNodeData.shownDegree} connections shown · {inspectedNodeData.meCount} ME · {inspectedNodeData.coCount} CO
-                    </p>
-                  </>
-                ) : inspectedResult && inspectedLayoutEdge ? (
-                  <>
-                    <p className="font-mono text-sm font-semibold">{baseGene(inspectedResult.ga)} / {baseGene(inspectedResult.gb)}</p>
-                    <p className={cn("mt-1 text-sm font-semibold", inspectedResult.direction === "ME" ? "text-me" : "text-co")}>
-                      {inspectedResult.direction === "ME" ? "Mutually exclusive" : "Co-occurring"}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-muted">
-                      <span>{mode === "consensus" ? "max " : ""}q {fmtQ(inspectedLayoutEdge.q)}</span>
-                      <span>{resultEffectText(inspectedResult, mode)}</span>
-                      <span>{modelAgreement(inspectedResult, qThreshold)}/3 significant</span>
-                    </div>
-                    <Button type="button" variant="soft" size="sm" className="mt-4" onClick={() => onSelect(inspectedResult)}>
-                      Open pair details
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-            </Panel>
+            <NetworkInspector
+              node={inspectedNodeData}
+              result={inspectedResult}
+              edge={inspectedLayoutEdge}
+              mode={mode}
+              qThreshold={qThreshold}
+              onSelect={onSelect}
+            />
           )}
           <Panel position="bottom-right" className="m-3 flex overflow-hidden rounded-full border border-line bg-paper p-1 shadow-sm">
-            <Button type="button" variant="ghost" size="icon" className="size-9" onClick={() => void instance?.zoomOut({ duration: 0 })} aria-label="Zoom out">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => void instance?.zoomOut({ duration: 0 })} aria-label="Zoom out">
               <Minus className="size-4" aria-hidden />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="size-9" onClick={() => void instance?.zoomIn({ duration: 0 })} aria-label="Zoom in">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => void instance?.zoomIn({ duration: 0 })} aria-label="Zoom in">
               <Plus className="size-4" aria-hidden />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="size-9" onClick={() => void instance?.fitView(FIT_OPTIONS)} aria-label="Fit network to view">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => void instance?.fitView(FIT_OPTIONS)} aria-label="Fit network to view">
               <Maximize2 className="size-4" aria-hidden />
             </Button>
             {layoutDirty && (
-              <Button type="button" variant="ghost" size="icon" className="size-9" onClick={resetLayout} aria-label="Reset node layout">
+              <Button type="button" variant="ghost" size="icon-sm" onClick={resetLayout} aria-label="Reset node layout">
                 <RotateCcw className="size-4" aria-hidden />
               </Button>
             )}

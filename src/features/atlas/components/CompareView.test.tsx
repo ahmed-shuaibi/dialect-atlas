@@ -12,6 +12,7 @@ import type {
   Bmr,
   CohortData,
   DialectRow,
+  ReleaseManifest,
   TransportDirection,
 } from "@/features/atlas/types";
 
@@ -103,7 +104,13 @@ function fixture(): CohortData {
   };
 }
 
-const manifestMethods = ["fisher", "discover", "megsa", "wesme_wesco"];
+const manifestMethods = {
+  dialect: { directions: ["ME", "CO"] },
+  fisher: { directions: ["ME", "CO"] },
+  discover: { directions: ["ME", "CO"] },
+  megsa: { directions: ["ME"] },
+  wesme_wesco: { directions: ["ME", "CO"] },
+} satisfies ReleaseManifest["methods"];
 
 describe("comparison row construction and sorting", () => {
   it("uses the significant union, excludes same-base pairs, and keeps missing values last", () => {
@@ -137,26 +144,35 @@ describe("comparison row construction and sorting", () => {
         data={fixture()}
         manifestMethods={manifestMethods}
         qThreshold={0.01}
+        direction="ME"
+        onDirectionChange={vi.fn()}
+        customize={<button type="button">Customize</button>}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
     const meSection = screen.getByRole("region", { name: "Mutually exclusive" });
-    expect(within(meSection).getByRole("heading", { name: "Mutually exclusive" }).parentElement?.parentElement)
-      .toHaveClass("flex-col", "sm:flex-row");
+    expect(screen.queryByRole("region", { name: "Co-occurring" })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Mutually exclusive" })).toBeChecked();
     expect(within(meSection).getByRole("combobox", { name: "Sort ME comparison by" }))
       .toHaveClass("w-full", "sm:w-auto");
     const table = within(meSection).getByRole("table");
-    const cbaseHeader = within(table).getByRole("columnheader", { name: "CBaSE" });
+    const cbaseHeader = within(table)
+      .getByRole("button", { name: "Sort by CBaSE" })
+      .closest("th");
+    expect(cbaseHeader).not.toBeNull();
     expect(cbaseHeader).toHaveAttribute("aria-sort", "ascending");
     expect(
       within(table).getAllByRole("row").slice(1, 4).map((row) => row.textContent),
     ).toEqual(expect.arrayContaining([expect.stringContaining("C_M / D_N")]));
 
     await user.click(within(table).getByRole("button", { name: "Sort by Fisher" }));
-    const fisherHeader = within(table).getByRole("columnheader", { name: "Fisher" });
+    const fisherHeader = within(table)
+      .getByRole("button", { name: "Sort by Fisher" })
+      .closest("th");
+    expect(fisherHeader).not.toBeNull();
     expect(fisherHeader).toHaveAttribute("aria-sort", "ascending");
     let bodyRows = within(table).getAllByRole("row").slice(1);
     expect(bodyRows[0]).toHaveTextContent("G_M / H_N");
@@ -174,5 +190,25 @@ describe("comparison row construction and sorting", () => {
     expect(bodyRows[0]).toHaveTextContent("J_M / Q_N");
     expect(bodyRows[1]).toHaveTextContent("G_M / H_N");
     expect(bodyRows[2]).toHaveTextContent("A_M / B_N");
+  });
+
+  it("names likely-passenger annotations in both responsive renderers", () => {
+    render(
+      <CompareView
+        data={fixture()}
+        manifestMethods={manifestMethods}
+        qThreshold={0.01}
+        direction="ME"
+        onDirectionChange={vi.fn()}
+        customize={<button type="button">Customize</button>}
+        likelyPassengers={new Set(["A_M"])}
+        highlightLikelyPassengers
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getAllByText("Likely passenger gene effect: A_M"),
+    ).toHaveLength(2);
   });
 });

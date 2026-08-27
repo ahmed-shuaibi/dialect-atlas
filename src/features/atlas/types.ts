@@ -4,7 +4,7 @@ export const DEFAULT_Q_THRESHOLD = 0.01;
 
 export type Bmr = (typeof BMR_IDS)[number];
 export type QThreshold = (typeof Q_THRESHOLDS)[number];
-export type AtlasView = "explore" | "compare" | "about";
+export type AtlasView = "explore" | "compare" | "about" | "contact";
 export type AtlasMode = "consensus" | Bmr;
 export type Direction = "ME" | "CO";
 export type ExploreDisplay = "network" | "list";
@@ -20,15 +20,32 @@ export interface ReleaseManifest {
   schema_version: string;
   immutable: boolean;
   generated_at: string;
-  coverage: unknown;
-  analysis: unknown;
-  bmrs: unknown;
-  methods: unknown;
+  coverage: {
+    cohorts: number;
+    samples: number;
+  };
+  analysis: {
+    top_k_event_features: number;
+    fdr_threshold: number;
+  };
+  bmrs: Array<{
+    id: Bmr;
+    label: string;
+    role: string;
+  }>;
+  methods: Record<ManifestMethodId, { directions: Direction[] }>;
   index_file: string;
   readme_file: string;
   readme_sha256: string;
   readme_bytes: number;
 }
+
+export type ManifestMethodId =
+  | "dialect"
+  | "fisher"
+  | "discover"
+  | "megsa"
+  | "wesme_wesco";
 
 export interface CohortMeta {
   id: string;
@@ -51,6 +68,16 @@ export interface ReleaseIndex {
 export interface ReleaseBundle {
   manifest: ReleaseManifest;
   index: ReleaseIndex;
+  likelyPassengers: LikelyPassengerAnnotations;
+}
+
+export interface LikelyPassengerAnnotations {
+  annotation_id: string;
+  schema_version: string;
+  definition: string;
+  driver_reference: string;
+  driver_reference_sha256: string;
+  cohorts: Record<string, string[]>;
 }
 
 export interface DialectRow {
@@ -150,4 +177,6 @@ export interface AtlasUrlState {
   exploreDisplay: ExploreDisplay;
   qThreshold: QThreshold;
   significantOnly: boolean;
+  compareDirection: Direction;
+  highlightLikelyPassengers: boolean;
 }

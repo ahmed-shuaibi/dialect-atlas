@@ -1,22 +1,23 @@
-import { Download, ExternalLink, LockKeyhole } from "lucide-react";
-import type { ReactNode } from "react";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cohortUrl, indexUrl, manifestUrl, readmeUrl } from "@/features/atlas/lib/atlas-data";
+  ArrowLeft,
+  ArrowRight,
+  Download,
+  ExternalLink,
+  LockKeyhole,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { ATLAS_LINKS, BMR_METHODS, METHODS } from "@/features/atlas/lib/atlas-metadata";
+import {
+  cohortUrl,
+  indexUrl,
+  manifestUrl,
+  readmeUrl,
+} from "@/features/atlas/lib/atlas-data";
 import type { CohortMeta, ReleaseBundle } from "@/features/atlas/types";
 
-function objectRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function numberFact(value: unknown): string {
-  return typeof value === "number" ? value.toLocaleString("en-US") : "—";
+function numberFact(value: number): string {
+  return value.toLocaleString("en-US");
 }
 
 function DownloadLink({ href, children }: { href: string; children: ReactNode }) {
@@ -32,240 +33,253 @@ function DownloadLink({ href, children }: { href: string; children: ReactNode })
   );
 }
 
-function MatrixVisual() {
+function CountMatrix() {
   const active = new Set([1, 6, 8, 13, 17, 22]);
   return (
-    <div className="grid w-36 grid-cols-6 gap-1" aria-hidden>
+    <div className="grid w-32 grid-cols-6 gap-1" aria-hidden>
       {Array.from({ length: 24 }, (_, index) => (
         <span
           key={index}
-          className={
-            active.has(index)
-              ? "aspect-square rounded-[3px] bg-brand"
-              : "aspect-square rounded-[3px] border border-line bg-canvas"
-          }
+          className={active.has(index)
+            ? "aspect-square rounded-[4px] bg-brand"
+            : "aspect-square rounded-[4px] border border-line bg-canvas"}
         />
       ))}
     </div>
   );
 }
 
-function EquationVisual() {
+function PairState() {
   return (
-    <div className="flex items-baseline gap-2 font-mono text-2xl font-medium tracking-[-0.04em]" aria-hidden>
-      <span className="text-ink">C</span>
-      <span className="text-muted">=</span>
-      <span className="text-brand">B</span>
-      <span className="text-muted">+</span>
-      <span className="text-support">D</span>
+    <div className="grid grid-cols-2 gap-1.5 font-mono text-xs" aria-hidden>
+      {["τ₀₀", "τ₀₁", "τ₁₀", "τ₁₁"].map((label, index) => (
+        <span
+          key={label}
+          className={index === 3
+            ? "grid size-12 place-items-center rounded-xl bg-brand text-paper"
+            : "grid size-12 place-items-center rounded-xl border border-line bg-canvas text-muted"}
+        >
+          {label}
+        </span>
+      ))}
     </div>
   );
 }
 
-function PairVisual() {
+function InteractionPair() {
   return (
-    <div className="grid w-40 gap-3" aria-hidden>
+    <div className="grid w-44 gap-4" aria-hidden>
       <div className="flex items-center gap-2">
-        <span className="size-5 rounded-full border-[5px] border-me-soft bg-me" />
-        <span className="h-1 flex-1 rounded-sm bg-me/55" />
-        <span className="size-5 rounded-full border-[5px] border-me-soft bg-me" />
-        <span className="ml-1 font-mono text-[10px] font-medium text-me">ME</span>
+        <span className="size-6 rounded-full border-[6px] border-me-soft bg-me" />
+        <span className="h-0.5 flex-1 rounded-full bg-me" />
+        <span className="size-6 rounded-full border-[6px] border-me-soft bg-me" />
+        <span className="font-mono text-xs font-semibold text-me">ME</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="size-5 rounded-full border-[5px] border-co-soft bg-co" />
-        <span className="h-px flex-1 border-t border-dashed border-co/50" />
-        <span className="size-5 rounded-full border-[5px] border-co-soft bg-co" />
-        <span className="ml-1 font-mono text-[10px] font-medium text-co">CO</span>
+        <span className="size-6 rounded-full border-[6px] border-co-soft bg-co" />
+        <span className="flex-1 border-t-2 border-dashed border-co" />
+        <span className="size-6 rounded-full border-[6px] border-co-soft bg-co" />
+        <span className="font-mono text-xs font-semibold text-co">CO</span>
       </div>
     </div>
   );
 }
 
-function ThresholdVisual() {
-  return (
-    <div className="font-mono" aria-hidden>
-      <p className="text-xs font-semibold text-muted">significant</p>
-      <p className="mt-1 text-2xl font-medium tracking-[-0.05em] text-support">q &lt; 0.01</p>
-    </div>
-  );
-}
-
-const STEPS = [
+const FORMULATION = [
   {
-    number: "01",
-    title: "Count mutation events",
-    body: "Rows are tumor samples. Columns are gene effects. Each cell records a somatic mutation count.",
-    visual: <MatrixVisual />,
+    label: "Count mutations",
+    caption: "Somatic mutation counts by tumor and gene effect.",
+    formula: "Cᵢ",
+    visual: <CountMatrix />,
   },
   {
-    number: "02",
-    title: "Separate driver from background",
-    body: "DIALECT models each observed count C as passenger background B plus latent driver signal D.",
-    visual: <EquationVisual />,
+    label: "Separate signal",
+    caption: "B is background; D is a latent driver state.",
+    formula: "Cᵢ = Bᵢ + Dᵢ",
+    visual: <PairState />,
   },
   {
-    number: "03",
-    title: "Fit each gene pair",
-    body: "Negative ρ indicates mutual exclusivity; positive ρ indicates co-occurrence. The LRT tests departure from independence.",
-    visual: <PairVisual />,
-  },
-  {
-    number: "04",
-    title: "Control false discovery",
-    body: "Within each cohort and background model, one Benjamini–Hochberg family covers all evaluated ME and CO pairs. q < 0.01 is significant.",
-    visual: <ThresholdVisual />,
+    label: "Identify dependencies",
+    caption: "ME ranks by ρ; CO ranks by LRT.",
+    formula: "τᵤᵥ = P(D=u,D′=v)",
+    visual: <InteractionPair />,
   },
 ] as const;
 
-const GLOSSARY = [
-  {
-    term: "_M / _N",
-    definition: "Missense and nonsense gene-effect columns.",
-  },
-  {
-    term: "ρ (rho)",
-    definition: "Interaction direction: negative for ME, positive for CO.",
-  },
-  {
-    term: "LRT",
-    definition: "Likelihood-ratio test statistic used to quantify departure from no interaction.",
-  },
-  {
-    term: "q / FDR",
-    definition: "Multiple-testing-adjusted p-value. This release calls q < 0.01 significant.",
-  },
-  {
-    term: "K = 100",
-    definition: "Top 100 count-ranked gene effects available to each background model.",
-  },
-  {
-    term: "BMR",
-    definition: "Background mutation-rate model used to estimate passenger counts.",
-  },
-] as const;
+const CAROUSEL_METHODS = METHODS.filter((method) => method.family !== "Background");
+
+function MethodCarousel() {
+  const [index, setIndex] = useState(0);
+  const method = CAROUSEL_METHODS[index] ?? CAROUSEL_METHODS[0];
+  const move = (delta: number) => {
+    setIndex((current) => (current + delta + CAROUSEL_METHODS.length) % CAROUSEL_METHODS.length);
+  };
+  if (!method) return null;
+
+  return (
+    <section aria-labelledby="comparison-methods-heading" className="mt-12">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-muted">Comparison methods</p>
+          <h2 id="comparison-methods-heading" className="mt-1 text-3xl font-semibold">Different nulls, one cohort.</h2>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="icon" onClick={() => move(-1)} aria-label="Previous method">
+            <ArrowLeft className="size-4" aria-hidden />
+          </Button>
+          <Button type="button" variant="outline" size="icon" onClick={() => move(1)} aria-label="Next method">
+            <ArrowRight className="size-4" aria-hidden />
+          </Button>
+        </div>
+      </div>
+      <article className="surface-card view-enter mt-5 grid min-h-64 gap-6 p-6 sm:p-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end" key={method.id} aria-live="polite">
+        <div>
+          <p className="font-mono text-sm text-muted">
+            {String(index + 1).padStart(2, "0")} / {String(CAROUSEL_METHODS.length).padStart(2, "0")}
+          </p>
+          <p className="mt-10 text-sm font-semibold text-muted">{method.family}</p>
+          <h3 className="mt-1 text-[clamp(2.4rem,6vw,4.8rem)] font-semibold leading-none tracking-[-0.05em]">
+            {method.label}
+          </h3>
+        </div>
+        <div>
+          <p className="max-w-xl text-xl font-medium leading-8 text-muted">{method.summary}</p>
+          <a
+            href={method.href}
+            target="_blank"
+            rel="noreferrer"
+            className="focus-ring mt-6 inline-flex items-center gap-2 rounded-full text-sm font-semibold text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+          >
+            Original method <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+        </div>
+      </article>
+      <div className="mt-3 flex justify-center gap-2" aria-label="Choose method">
+        {CAROUSEL_METHODS.map((option, optionIndex) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setIndex(optionIndex)}
+            aria-label={`Show ${option.label}`}
+            aria-pressed={optionIndex === index}
+            className={optionIndex === index
+              ? "focus-ring h-2.5 w-8 rounded-full bg-ink transition-[width,background-color]"
+              : "focus-ring size-2.5 rounded-full bg-line transition-[width,background-color] hover:bg-muted"}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: CohortMeta | null }) {
-  const coverage = objectRecord(bundle.manifest.coverage);
-  const analysis = objectRecord(bundle.manifest.analysis);
+  const { coverage, analysis } = bundle.manifest;
   const releaseFacts = [
     ["Cohorts", numberFact(coverage.cohorts)],
-    ["Tumor samples", numberFact(coverage.samples)],
-    ["Gene-effect cap", numberFact(analysis.top_k_event_features)],
-    [
-      "Significance",
-      typeof analysis.fdr_threshold === "number" ? `q < ${analysis.fdr_threshold}` : "q < 0.01",
-    ],
+    ["Tumors", numberFact(coverage.samples)],
+    ["Gene-effect cap", `K = ${numberFact(analysis.top_k_event_features)}`],
+    ["Backgrounds", "3"],
   ];
 
   return (
-    <TooltipProvider delayDuration={250}>
-      <section className="mx-auto max-w-7xl pb-20 pt-12 sm:pt-16">
-        <header className="grid items-end gap-7 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-          <div>
-            <h1 className="max-w-[14ch] text-[clamp(3rem,6.2vw,5.4rem)] font-[650] leading-[0.96] tracking-[-0.045em]">
-              Find meaningful gene interactions.
-            </h1>
-          </div>
-          <p className="max-w-xl text-lg font-medium leading-8 text-muted">
-            DIALECT separates likely passenger mutations from latent driver signal, then identifies gene pairs that occur together less or more often than expected.
+    <section className="mx-auto max-w-7xl pb-20 pt-12 sm:pt-16">
+      <header>
+        <h1 className="max-w-[15ch] text-[clamp(3.1rem,7vw,6.2rem)] font-[650] leading-[0.94] tracking-[-0.05em]">
+          Find meaningful gene interactions.
+        </h1>
+        <p className="mt-7 max-w-4xl text-[clamp(1.2rem,2.3vw,1.65rem)] font-medium leading-[1.55] text-muted">
+          DIALECT separates likely passenger mutations from latent driver signal, then identifies gene pairs that occur together less or more often than expected.
+        </p>
+      </header>
+
+      <section aria-labelledby="formulation-heading" className="mt-12">
+        <h2 id="formulation-heading" className="sr-only">DIALECT formulation</h2>
+        <div className="grid overflow-hidden rounded-[28px] border border-line bg-line shadow-soft lg:grid-cols-3">
+          {FORMULATION.map((step, index) => (
+            <article key={step.label} className="formulation-step flex min-h-80 flex-col bg-paper p-6 sm:p-7">
+              <div className="flex items-center justify-between gap-4">
+                <span className="font-mono text-xs text-muted">0{index + 1}</span>
+                <span className="font-mono text-sm font-medium text-brand">{step.formula}</span>
+              </div>
+              <div className="mt-8 flex min-h-28 items-center">{step.visual}</div>
+              <h3 className="mt-auto text-2xl font-semibold">{step.label}</h3>
+              <p className="mt-2 text-base leading-7 text-muted">{step.caption}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="backgrounds-heading" className="mt-12">
+        <div className="max-w-3xl">
+          <h2 id="backgrounds-heading" className="text-3xl font-semibold">Background sensitivity</h2>
+          <p className="mt-3 text-lg leading-8 text-muted">
+            CBaSE is primary. DIG and MutSigCV2 test sensitivity to the background model.
           </p>
-        </header>
-
-        <section aria-labelledby="method-heading" className="mt-12">
-          <h2 id="method-heading" className="sr-only">How DIALECT works</h2>
-          <div className="grid overflow-hidden rounded-[24px] border border-line bg-line shadow-soft md:grid-cols-2 xl:grid-cols-4">
-            {STEPS.map((step) => (
-              <article key={step.number} className="flex min-h-72 flex-col bg-paper p-5 sm:p-6">
-                <p className="font-mono text-xs font-medium text-muted">{step.number}</p>
-                <div className="mt-7 flex min-h-16 items-center">{step.visual}</div>
-                <h3 className="mt-7 text-xl font-semibold">{step.title}</h3>
-                <p className="mt-2 text-[15px] leading-6 text-muted">{step.body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-10 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="surface-card p-6 sm:p-7">
-            <h2 className="text-2xl font-semibold">Three views of the same cohort</h2>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-muted">
-              CBaSE is primary. DIG and MutSigCV2 test sensitivity to the background model. The default ranks exact pairs with the same direction under all three.
-            </p>
-            <p className="mt-4 border-l-2 border-brand pl-4 text-base font-medium leading-7 text-ink">
-              This is sensitivity agreement, not independent replication. Significant-only applies the selected q cutoff to each background; MutSig rows reusing CBaSE are excluded from consensus.
-            </p>
-          </article>
-          <article className="rounded-[24px] border border-co/20 bg-co-soft/60 p-6 sm:p-7">
-            <p className="font-mono text-xs font-medium text-co">CO caution</p>
-            <h2 className="mt-3 text-2xl font-semibold">Tumor burden can mimic co-occurrence.</h2>
-            <p className="mt-3 text-base leading-7 text-muted">
-              Treat CO findings as candidates and compare backgrounds. Per-sample mutation burden can create apparent co-occurrence, especially in hypermutated tumors.
-            </p>
-          </article>
-        </section>
-
-        <section aria-labelledby="terms-heading" className="mt-12">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 id="terms-heading" className="text-3xl font-semibold">Read the notation</h2>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" className="focus-ring rounded-full text-sm font-semibold text-muted underline decoration-line underline-offset-4 hover:text-ink">
-                  Why backgrounds matter
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                The background model is load-bearing: it changes how much of each observed mutation count is attributed to passengers.
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <dl className="mt-5 grid gap-px overflow-hidden rounded-[24px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
-            {GLOSSARY.map((item) => (
-              <div key={item.term} className="bg-paper p-5">
-                <dt className="font-mono text-sm font-medium text-ink">{item.term}</dt>
-                <dd className="mt-2 text-sm leading-6 text-muted">{item.definition}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-
-        <section aria-labelledby="release-heading" className="surface-card mt-12 p-6 sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-5">
-            <div>
-              <div className="inline-flex items-center gap-2 text-sm font-semibold text-support">
-                <LockKeyhole className="size-3.5" aria-hidden />
-                {bundle.manifest.immutable ? "Immutable release" : "Release"}
-              </div>
-              <h2 id="release-heading" className="mt-2 text-2xl font-semibold">
-                {bundle.manifest.release_id}
-              </h2>
-            </div>
+          <p className="mt-1 text-lg leading-8 text-muted">
+            Consensus keeps exact pairs with the same direction under all three.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          {Object.values(BMR_METHODS).map((method) => (
             <a
-              href="https://github.com/raphael-group/dialect"
+              key={method.id}
+              href={method.href}
               target="_blank"
               rel="noreferrer"
-              className="focus-ring inline-flex items-center gap-1.5 rounded-full text-sm font-semibold text-muted underline decoration-line underline-offset-4 hover:text-ink"
+              className="focus-ring group rounded-[22px] border border-line bg-paper p-5 shadow-sm transition-colors hover:border-ink/25 hover:bg-sand"
             >
-              Source code <ExternalLink className="size-3.5" aria-hidden />
+              <span className="flex items-center justify-between gap-3">
+                <span className="text-xl font-semibold">{method.label}</span>
+                <ExternalLink className="size-4 text-muted group-hover:text-ink" aria-hidden />
+              </span>
+              <span className="mt-2 block text-base text-muted">{method.summary}</span>
             </a>
-          </div>
-
-          <dl className="mt-6 grid gap-px overflow-hidden rounded-[20px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-            {releaseFacts.map(([label, value]) => (
-              <div key={label} className="bg-canvas/65 px-4 py-3">
-                <dt className="text-xs font-semibold text-muted">{label}</dt>
-                <dd className="mt-1 font-mono text-[15px] font-medium">{value}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            <DownloadLink href={manifestUrl()}>Manifest</DownloadLink>
-            <DownloadLink href={indexUrl(bundle)}>Cohort index</DownloadLink>
-            <DownloadLink href={readmeUrl(bundle)}>Data dictionary</DownloadLink>
-            {cohort && <DownloadLink href={cohortUrl(cohort)}>Current cohort</DownloadLink>}
-          </div>
-        </section>
+          ))}
+        </div>
+        <p className="mt-4 rounded-[18px] bg-co-soft px-4 py-3 text-base font-medium text-co">
+          CO is sensitive to tumor-burden heterogeneity; compare backgrounds.
+        </p>
       </section>
-    </TooltipProvider>
+
+      <MethodCarousel />
+
+      <section aria-labelledby="release-heading" className="surface-card mt-12 p-6 sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <div className="inline-flex items-center gap-2 text-sm font-semibold text-support">
+              <LockKeyhole className="size-3.5" aria-hidden />
+              Immutable release
+            </div>
+            <h2 id="release-heading" className="mt-2 text-2xl font-semibold">
+              {bundle.manifest.release_id}
+            </h2>
+          </div>
+          <a
+            href={ATLAS_LINKS.source}
+            target="_blank"
+            rel="noreferrer"
+            className="focus-ring inline-flex items-center gap-1.5 rounded-full text-sm font-semibold text-muted underline decoration-line underline-offset-4 hover:text-ink"
+          >
+            Source code <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+        </div>
+
+        <dl className="mt-6 grid gap-px overflow-hidden rounded-[20px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+          {releaseFacts.map(([label, value]) => (
+            <div key={label} className="bg-canvas/65 px-4 py-3">
+              <dt className="text-xs font-semibold text-muted">{label}</dt>
+              <dd className="mt-1 font-mono text-[15px] font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <DownloadLink href={manifestUrl()}>Manifest</DownloadLink>
+          <DownloadLink href={indexUrl(bundle)}>Cohort index</DownloadLink>
+          <DownloadLink href={readmeUrl(bundle)}>Data dictionary</DownloadLink>
+          {cohort && <DownloadLink href={cohortUrl(cohort)}>Current cohort</DownloadLink>}
+        </div>
+      </section>
+    </section>
   );
 }

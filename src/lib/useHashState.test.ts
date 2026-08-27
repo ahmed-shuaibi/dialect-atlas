@@ -22,6 +22,8 @@ describe("Atlas hash state", () => {
       exploreDisplay: "network" as const,
       qThreshold: 0.005 as const,
       significantOnly: true,
+      compareDirection: "CO" as const,
+      highlightLikelyPassengers: true,
     };
     expect(parseAtlasHash(serializeAtlasHash(state))).toEqual(state);
   });
@@ -44,17 +46,25 @@ describe("Atlas hash state", () => {
     ).toBe("#view=explore&mode=consensus&display=list&q=0.05&significant=1");
   });
 
-  it("ignores removed strict and direction settings in legacy links", () => {
+  it("ignores removed settings while preserving the comparison direction", () => {
     const parsed = parseAtlasHash(
       "#view=explore&cohort=TCGA__LUAD&mode=consensus&strict=1&direction=CO&compare=ME",
     );
     expect(parsed).toEqual({
       ...URL_DEFAULTS,
       cohort: "TCGA__LUAD",
+      compareDirection: "CO",
     });
     const serialized = serializeAtlasHash(parsed);
     expect(serialized).not.toContain("strict");
-    expect(serialized).not.toContain("direction");
+    expect(serialized).toContain("direction=CO");
     expect(serialized).not.toContain("compare");
+  });
+
+  it("supports contact and paper-faithful passenger annotations", () => {
+    const parsed = parseAtlasHash("#view=contact&passengers=1");
+    expect(parsed.view).toBe("contact");
+    expect(parsed.highlightLikelyPassengers).toBe(true);
+    expect(serializeAtlasHash(parsed)).toContain("passengers=1");
   });
 });

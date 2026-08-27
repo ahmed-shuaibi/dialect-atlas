@@ -1,38 +1,53 @@
-import { ArrowUpRight, Check } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { resultEffectText } from "@/features/atlas/components/explore-display";
-import { fmtQ, modelAgreement, resultIsSignificant, resultQ } from "@/features/atlas/lib/atlas-transform";
+import { DIRECTION_METADATA } from "@/features/atlas/lib/atlas-metadata";
+import { backgroundSupport, fmtQ, resultIsSignificant, resultQ } from "@/features/atlas/lib/atlas-transform";
 import type { AtlasMode, Direction, InteractionResult } from "@/features/atlas/types";
 import { cn } from "@/lib/utils";
 
-const DIRECTION_COPY: Record<Direction, { title: string; detail: string }> = {
-  ME: {
-    title: "Mutually exclusive",
-    detail: "Found together less often than expected.",
-  },
-  CO: {
-    title: "Co-occurring",
-    detail: "Found together more often than expected.",
-  },
-};
-
 const LIST_PAGE_SIZE = 60;
+
+function GeneEffect({
+  value,
+  highlighted,
+}: {
+  value: string;
+  highlighted: boolean;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 break-words">
+      {highlighted && (
+        <span
+          className="size-2 shrink-0 rounded-full bg-passenger"
+          aria-label="Likely passenger gene effect"
+          title="Likely passenger gene effect"
+        />
+      )}
+      {value}
+    </span>
+  );
+}
 
 export function InteractionLane({
   direction,
   results,
   mode,
   qThreshold,
+  likelyPassengers,
+  highlightLikelyPassengers,
   onSelect,
 }: {
   direction: Direction;
   results: InteractionResult[];
   mode: AtlasMode;
   qThreshold: number;
+  likelyPassengers: ReadonlySet<string>;
+  highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
 }) {
-  const copy = DIRECTION_COPY[direction];
+  const copy = DIRECTION_METADATA[direction];
   const [visible, setVisible] = useState(LIST_PAGE_SIZE);
   useEffect(() => setVisible(LIST_PAGE_SIZE), [results]);
   const shown = results.slice(0, visible);
@@ -44,7 +59,7 @@ export function InteractionLane({
             id={`${direction}-heading`}
             className="text-xl font-semibold leading-tight sm:text-2xl"
           >
-            {copy.title}
+            {copy.label}
           </h2>
           <p className="mt-1 text-sm leading-5 text-muted">{copy.detail}</p>
         </div>
@@ -60,9 +75,11 @@ export function InteractionLane({
       ) : (
         <ol className="space-y-1 p-2">
           {shown.map((result) => {
-            const agreement = modelAgreement(result, qThreshold);
+            const support = backgroundSupport(result, qThreshold);
             const significant = resultIsSignificant(result, mode, qThreshold);
             const q = resultQ(result, mode);
+            const passengerA = highlightLikelyPassengers && likelyPassengers.has(result.ga);
+            const passengerB = highlightLikelyPassengers && likelyPassengers.has(result.gb);
             return (
               <li key={result.id} data-result-id={result.id}>
                 <button
@@ -71,10 +88,11 @@ export function InteractionLane({
                   className={cn(
                     "focus-ring group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-4 text-left transition-colors hover:bg-sand sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]",
                     significant && "bg-support-soft/60",
+                    (passengerA || passengerB) && "shadow-[inset_4px_0_0_var(--passenger)]",
                   )}
                 >
                   <span className="min-w-0 font-mono text-[15px] font-semibold tracking-[-0.015em]">
-                    <span className="break-words">{result.ga}</span>
+                    <GeneEffect value={result.ga} highlighted={passengerA} />
                     <span
                       aria-hidden
                       className={cn(
@@ -82,7 +100,7 @@ export function InteractionLane({
                         direction === "ME" ? "border-solid border-me" : "border-dashed border-co",
                       )}
                     />
-                    <span className="break-words">{result.gb}</span>
+                    <GeneEffect value={result.gb} highlighted={passengerB} />
                   </span>
                   <span className="hidden font-mono text-[13px] font-medium sm:block">
                     {resultEffectText(result, mode)}
@@ -91,17 +109,14 @@ export function InteractionLane({
                     {mode === "consensus" ? "max " : ""}q {fmtQ(q)}
                   </span>
                   <span className="flex items-center justify-end gap-2 text-sm font-semibold text-muted">
-                    {significant && (
-                      <span className="grid size-6 place-items-center rounded-full bg-support text-paper" aria-label={`Significant at q ${fmtQ(q)}`}>
-                        <Check className="size-3.5" strokeWidth={2.6} aria-hidden />
-                      </span>
-                    )}
                     <ArrowUpRight className="size-4 transition-colors group-hover:text-ink" aria-hidden />
                   </span>
                   <span className="col-start-1 flex items-center gap-3 text-[13px] font-semibold sm:hidden">
                     <span className="font-mono">{resultEffectText(result, mode)}</span>
                     <span className="font-mono text-muted">{mode === "consensus" ? "max " : ""}q {fmtQ(q)}</span>
-                    <span className="text-muted">{agreement}/3 significant</span>
+                    <span className="text-muted">
+                      {support.significant}/{support.independent} independent
+                    </span>
                   </span>
                 </button>
               </li>

@@ -6,11 +6,15 @@ export function InteractionList({
   results,
   mode,
   qThreshold,
+  likelyPassengers,
+  highlightLikelyPassengers,
   onSelect,
 }: {
   results: InteractionResult[];
   mode: AtlasMode;
   qThreshold: number;
+  likelyPassengers: ReadonlySet<string>;
+  highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
 }) {
   const me = useMemo(
@@ -22,9 +26,33 @@ export function InteractionList({
     [results],
   );
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <InteractionLane direction="ME" results={me} mode={mode} qThreshold={qThreshold} onSelect={onSelect} />
-      <InteractionLane direction="CO" results={co} mode={mode} qThreshold={qThreshold} onSelect={onSelect} />
+    <div>
+      {highlightLikelyPassengers && (
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted">
+          <span className="size-2.5 rounded-full bg-passenger" aria-hidden />
+          Likely passenger gene effect
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <InteractionLane
+          direction="ME"
+          results={me}
+          mode={mode}
+          qThreshold={qThreshold}
+          likelyPassengers={likelyPassengers}
+          highlightLikelyPassengers={highlightLikelyPassengers}
+          onSelect={onSelect}
+        />
+        <InteractionLane
+          direction="CO"
+          results={co}
+          mode={mode}
+          qThreshold={qThreshold}
+          likelyPassengers={likelyPassengers}
+          highlightLikelyPassengers={highlightLikelyPassengers}
+          onSelect={onSelect}
+        />
+      </div>
     </div>
   );
 }

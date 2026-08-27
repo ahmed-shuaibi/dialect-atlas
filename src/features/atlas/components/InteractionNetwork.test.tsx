@@ -121,7 +121,8 @@ describe("InteractionNetwork", () => {
         totalResults={2}
         mode="cbase"
         qThreshold={0.01}
-        query=""
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={vi.fn()}
       />,
     );
@@ -130,6 +131,16 @@ describe("InteractionNetwork", () => {
     expect(tp53).toHaveClass("draggable");
     expect(tp53).toHaveAttribute("tabindex", "0");
     expect(tp53).toHaveAttribute("aria-label", expect.stringMatching(/2 connections shown/i));
+    const handles = tp53.querySelectorAll<HTMLElement>(".react-flow__handle");
+    expect(handles).toHaveLength(2);
+    for (const handle of handles) {
+      expect(handle).toHaveStyle({
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -50%)",
+        pointerEvents: "none",
+      });
+    }
     await screen.findByTestId("rf__edge-ME::KRAS_M::TP53_M");
 
     fireEvent.mouseEnter(tp53);
@@ -155,7 +166,8 @@ describe("InteractionNetwork", () => {
         totalResults={2}
         mode="cbase"
         qThreshold={0.01}
-        query=""
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={vi.fn()}
       />,
     );
@@ -187,7 +199,8 @@ describe("InteractionNetwork", () => {
         totalResults={1}
         mode="cbase"
         qThreshold={0.01}
-        query=""
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={vi.fn()}
       />,
     );
@@ -207,7 +220,8 @@ describe("InteractionNetwork", () => {
         totalResults={1}
         mode="cbase"
         qThreshold={0.01}
-        query=""
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={vi.fn()}
       />,
     );

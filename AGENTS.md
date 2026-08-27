@@ -45,6 +45,10 @@ node atlas/scripts/validate-release.mjs
 
 The release contains a manifest, index, human-readable data dictionary, and one
 complete compact JSON table per cohort. Types: `src/features/atlas/types.ts`.
+Likely-passenger annotations live in the separately versioned
+`public/data/annotations/likely-passengers-v1.json` sidecar. They are exact
+event features (`_M`/`_N`) drawn from the count-ranked, non-OncoKB source lists;
+never edit the immutable release to add UI annotations.
 
 ## Design locks (non-negotiable)
 
@@ -52,14 +56,14 @@ complete compact JSON table per cohort. Types: `src/features/atlas/types.ts`.
   dark mode is available from the header, Raleway is the UI face, and large type plus
   generous radii are the baseline. IBM Plex Mono is reserved for genes and statistics.
 - **Color is semantic and restrained:** ME blue, CO ochre, and one support green.
-- **Cancer first:** never choose a default cohort. Selection is two-stage: cancer type,
-  then the available study/cohort for that cancer.
+- **Study first:** never choose a default cohort. Selection is two-stage: study, then
+  cancer type. Always show the release cohort token alongside the full cancer name.
 - **Result first:** Explore defaults to a two-lane ranked list with ME and CO always
   visible. The optional network uses the same candidate set, is direction balanced and
   bounded, and supports drag, hover/focus inspection, selection, and pair detail.
 - **Candidates and calls stay distinct:** the default list exposes ranked candidates;
   `Significant only` applies the active strict q-value cutoff. Significant rows use a
-  quiet tint and check, never a repeated text badge. Empty significant sets stay honest
+  quiet tint, never a repeated icon or text badge. Empty significant sets stay honest
   and offer a one-step return to the ranked list.
 - **All three BMRs by default:** the default candidate set requires the exact pair and
   direction under CBaSE, DIG, and a real MutSigCV2 background. Exclude MutSig rows
@@ -74,8 +78,17 @@ complete compact JSON table per cohort. Types: `src/features/atlas/types.ts`.
 - **Progressive disclosure:** pair detail, BMR selection, and q cutoff belong in
   dialogs/drawers; methodology and provenance belong in Compare/About, not permanent
   prose. Cancer/cohort switching is the rounded Change action beside the cancer name.
-- **Navigation order:** About, Explore, Compare. Pair rows with DIALECT evidence may
+- **Navigation order:** About, Explore, Compare, Contact. Pair rows with DIALECT evidence may
   open detail from Compare even when absent from the active Explore result set.
+- **Shared page geometry:** Explore and Compare use `CohortHeader` and
+  `ResultsToolbar`. Their title, cohort action, study/tumor pills, controls, and
+  Customize placement stay aligned. Compare shows one direction at a time.
+- **Network scope:** show the top 10 ranked candidates per direction before optional
+  significance filtering. Connections terminate at node centers; preserve drag,
+  hover/focus inspection, selection, and pair detail.
+- **Likely-passenger highlighting is optional:** the Customize toggle shades exact
+  event features from the published annotation sidecar. Never label these as genes or
+  as significance calls.
 - **Minimal text and motion.** Use short sentence-case copy, real buttons, visible focus,
   reduced-motion behavior, and mobile stacking. No playful research claims.
 - Reuse `src/components/ui/*`; numbers use tabular figures and genes/stats use mono.

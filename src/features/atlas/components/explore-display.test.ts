@@ -17,16 +17,25 @@ describe("dense Explore display", () => {
     expect(resultsForNetwork(results, 10)).toEqual(results);
   });
 
-  it("balances the top-ranked visual budget across directions", () => {
+  it("shows the requested number from each direction", () => {
     const me = Array.from({ length: 10 }, (_, index) => result("ME", index));
     const co = Array.from({ length: 10 }, (_, index) => result("CO", index));
-    const shown = resultsForNetwork([...me, ...co], 6);
+    const shown = resultsForNetwork([...me, ...co], 3);
     expect(shown).toEqual([...me.slice(0, 3), ...co.slice(0, 3)]);
   });
 
-  it("gives unused directional capacity to the remaining results", () => {
+  it("does not refill unused directional capacity", () => {
     const me = [result("ME", 0)];
     const co = Array.from({ length: 10 }, (_, index) => result("CO", index));
-    expect(resultsForNetwork([...me, ...co], 6)).toEqual([me[0], ...co.slice(0, 5)]);
+    expect(resultsForNetwork([...me, ...co], 3)).toEqual([me[0], ...co.slice(0, 3)]);
+  });
+
+  it("defaults to the top ten per direction", () => {
+    const me = Array.from({ length: 15 }, (_, index) => result("ME", index));
+    const co = Array.from({ length: 15 }, (_, index) => result("CO", index));
+    expect(resultsForNetwork([...me, ...co])).toEqual([
+      ...me.slice(0, 10),
+      ...co.slice(0, 10),
+    ]);
   });
 });

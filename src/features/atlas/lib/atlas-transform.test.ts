@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  backgroundSupport,
   consensusResults,
   exploreResults,
   filterResultsByGene,
   findResultForMode,
   isSignificant,
   lrtEvidence,
-  modelAgreement,
   modelResults,
   resultIsSignificant,
   resultQ,
@@ -348,12 +348,22 @@ describe("Atlas interaction ranking", () => {
     const [result] = modelResults(cohort, "dig", "ME");
     expect(result.representative.rank).toBe(2);
     expect(resultQ(result, "dig")).toBe(0.008);
-    expect(modelAgreement(result)).toBe(2);
-    expect(modelAgreement(result, 0.05)).toBe(3);
+    expect(backgroundSupport(result)).toEqual({ significant: 2, independent: 3 });
+    expect(backgroundSupport(result, 0.05)).toEqual({ significant: 3, independent: 3 });
     expect(resultIsSignificant(result, "dig", 0.005)).toBe(false);
     expect(resultIsSignificant(result, "dig", 0.01)).toBe(true);
     expect(modelResults(cohort, "mutsig", "ME")).toEqual([]);
     expect(modelResults(cohort, "mutsig", "ME", { qThreshold: 0.05 })).toHaveLength(1);
+  });
+
+  it("excludes MutSigCV2 CBaSE fallback from support and its denominator", () => {
+    const shared = dialectRow("A_M", "B_N", "ME", 1, { q: 0.001 });
+    const cohort = data(
+      { cbase: [shared], dig: [shared], mutsig: [shared] },
+      ["A_M"],
+    );
+    const [result] = modelResults(cohort, "cbase", "ME");
+    expect(backgroundSupport(result)).toEqual({ significant: 2, independent: 2 });
   });
 
   it("gives network and list consumers one complete result set", () => {

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AboutView } from "@/features/atlas/components/AboutView";
 import { CohortHeader } from "@/features/atlas/components/CohortHeader";
 import { CompareView } from "@/features/atlas/components/CompareView";
+import { ContactView } from "@/features/atlas/components/ContactView";
 import { InitialCohortChooser } from "@/features/atlas/components/CohortChooser";
 import { ExploreView, ResultsSkeleton } from "@/features/atlas/components/ExploreView";
 import { PairDialog } from "@/features/atlas/components/PairDialog";
@@ -60,8 +61,17 @@ export function App() {
   const [url, setUrl] = useHashState();
   const release = useRelease();
   const cohortMeta = release.data?.index.cohorts.find((cohort) => cohort.id === url.cohort) ?? null;
-  const shouldLoadCohort = url.view !== "about" && cohortMeta != null;
+  const isResultsView = url.view === "explore" || url.view === "compare";
+  const shouldLoadCohort = isResultsView && cohortMeta != null;
   const cohort = useCohort(shouldLoadCohort ? cohortMeta : null);
+  const likelyPassengers = useMemo(
+    () => new Set(
+      cohortMeta && release.data
+        ? release.data.likelyPassengers.cohorts[cohortMeta.id] ?? []
+        : [],
+    ),
+    [cohortMeta, release.data],
+  );
   const selection = useMemo(() => parsePairId(url.pair), [url.pair]);
   const selectedResult = useMemo(
     () =>
@@ -91,19 +101,40 @@ export function App() {
     setUrl({ cohort: id, pair: undefined, settings: false });
   };
   const selectPair = (result: InteractionResult) => setUrl({ pair: result.id });
+  const customize = (
+    <SettingsDrawer
+      open={url.settings}
+      showBackground={url.view === "explore"}
+      mode={url.mode}
+      qThreshold={url.qThreshold}
+      highlightLikelyPassengers={url.highlightLikelyPassengers}
+      onOpenChange={(settings) => setUrl({ settings }, { replace: !settings })}
+      onModeChange={(mode) => setUrl({ mode, pair: undefined })}
+      onQThresholdChange={(qThreshold) => setUrl({ qThreshold, pair: undefined })}
+      onHighlightLikelyPassengersChange={(highlightLikelyPassengers) =>
+        setUrl({ highlightLikelyPassengers })
+      }
+    />
+  );
 
   return (
     <div className="min-h-screen">
       <SiteNav state={url} />
 
-      {release.status === "loading" && <FullPageLoading />}
-      {release.status === "error" && (
+      {url.view === "contact" && (
+        <main id="main" tabIndex={-1} className="site-shell outline-none">
+          <ContactView />
+        </main>
+      )}
+
+      {url.view !== "contact" && release.status === "loading" && <FullPageLoading />}
+      {url.view !== "contact" && release.status === "error" && (
         <main id="main" tabIndex={-1} className="site-shell">
           <ErrorState title="Release data unavailable" error={release.error} onRetry={release.retry} />
         </main>
       )}
 
-      {release.data && (
+      {url.view !== "contact" && release.data && (
         <main id="main" tabIndex={-1} className="outline-none">
           {url.view === "about" ? (
             <div className="site-shell">
@@ -121,19 +152,10 @@ export function App() {
           ) : (
             <div className="site-shell pb-16">
               <CohortHeader
+                view={url.view}
                 cohort={cohortMeta}
                 cohorts={release.data.index.cohorts}
                 onCohortChange={chooseCohort}
-                settings={
-                  <SettingsDrawer
-                    open={url.settings}
-                    mode={url.mode}
-                    qThreshold={url.qThreshold}
-                    onOpenChange={(settings) => setUrl({ settings }, { replace: !settings })}
-                    onModeChange={(mode) => setUrl({ mode, pair: undefined })}
-                    onQThresholdChange={(qThreshold) => setUrl({ qThreshold, pair: undefined })}
-                  />
-                }
               />
 
               {cohort.status === "loading" && <ResultsSkeleton />}
@@ -151,6 +173,9 @@ export function App() {
                   onSignificantOnlyChange={(significantOnly) =>
                     setUrl({ significantOnly, pair: undefined })
                   }
+                  customize={customize}
+                  likelyPassengers={likelyPassengers}
+                  highlightLikelyPassengers={url.highlightLikelyPassengers}
                   onSelect={selectPair}
                 />
               )}
@@ -159,6 +184,11 @@ export function App() {
                   data={cohort.data}
                   manifestMethods={release.data.manifest.methods}
                   qThreshold={url.qThreshold}
+                  direction={url.compareDirection}
+                  onDirectionChange={(compareDirection) => setUrl({ compareDirection })}
+                  customize={customize}
+                  likelyPassengers={likelyPassengers}
+                  highlightLikelyPassengers={url.highlightLikelyPassengers}
                   onSelect={selectPair}
                 />
               )}
@@ -166,9 +196,10 @@ export function App() {
               {cohort.data && (
                 <PairDialog
                   result={selectedResult}
-                  data={cohort.data}
-                  mode={url.mode}
+                  mode={url.view === "compare" ? "consensus" : url.mode}
                   qThreshold={url.qThreshold}
+                  likelyPassengers={likelyPassengers}
+                  highlightLikelyPassengers={url.highlightLikelyPassengers}
                   open={selectedResult != null}
                   onOpenChange={(open) => !open && setUrl({ pair: undefined }, { replace: true })}
                 />

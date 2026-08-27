@@ -1,9 +1,10 @@
 import { Check, List, ListFilter, Share2 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { SearchField } from "@/components/ui/search-field";
-import { SegmentedControl, SegmentedControlButton } from "@/components/ui/segmented-control";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { InteractionList } from "@/features/atlas/components/InteractionList";
+import { ResultsToolbar } from "@/features/atlas/components/ResultsToolbar";
 import { resultsForNetwork } from "@/features/atlas/components/explore-display";
 import { exploreResults, filterResultsByGene } from "@/features/atlas/lib/atlas-transform";
 import type {
@@ -17,6 +18,11 @@ const InteractionNetwork = lazy(async () => {
   const module = await import("@/features/atlas/components/InteractionNetwork");
   return { default: module.InteractionNetwork };
 });
+
+const DISPLAY_OPTIONS = [
+  { value: "list", label: "List", icon: <List className="size-4" aria-hidden /> },
+  { value: "network", label: "Network", icon: <Share2 className="size-4" aria-hidden /> },
+] as const;
 
 function EmptyExplore({
   query,
@@ -62,6 +68,9 @@ export function ExploreView({
   onDisplayChange,
   onSignificantOnlyChange,
   onSelect,
+  customize,
+  likelyPassengers,
+  highlightLikelyPassengers,
 }: {
   data: CohortData;
   mode: AtlasMode;
@@ -71,6 +80,9 @@ export function ExploreView({
   onDisplayChange: (display: ExploreDisplay) => void;
   onSignificantOnlyChange: (significantOnly: boolean) => void;
   onSelect: (result: InteractionResult) => void;
+  customize: ReactNode;
+  likelyPassengers: ReadonlySet<string>;
+  highlightLikelyPassengers: boolean;
 }) {
   const [query, setQuery] = useState("");
   useEffect(() => setQuery(""), [data.id]);
@@ -89,35 +101,39 @@ export function ExploreView({
 
   return (
     <section aria-label="Interaction results">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <SearchField
-          value={query}
-          onChange={setQuery}
-          placeholder="Find a gene"
-          label="Find a gene"
-          className="w-full sm:w-64"
-        />
-        <Button
-          type="button"
-          variant="filter"
-          size="sm"
-          aria-pressed={significantOnly}
-          onClick={() => onSignificantOnlyChange(!significantOnly)}
-        >
-          {significantOnly ? <Check className="size-4" aria-hidden /> : <ListFilter className="size-4" aria-hidden />}
-          Significant only
-        </Button>
-        <SegmentedControl aria-label="Explore display" className="sm:ml-auto">
-          <SegmentedControlButton active={display === "list"} onClick={() => onDisplayChange("list")}>
-            <List className="size-4" aria-hidden />
-            List
-          </SegmentedControlButton>
-          <SegmentedControlButton active={display === "network"} onClick={() => onDisplayChange("network")}>
-            <Share2 className="size-4" aria-hidden />
-            Network
-          </SegmentedControlButton>
-        </SegmentedControl>
-      </div>
+      <ResultsToolbar
+        controls={(
+          <>
+            <SegmentedControl
+              value={display}
+              options={DISPLAY_OPTIONS}
+              onChange={onDisplayChange}
+              label="Explore display"
+            />
+            <Button
+              type="button"
+              variant="filter"
+              size="sm"
+              aria-pressed={significantOnly}
+              onClick={() => onSignificantOnlyChange(!significantOnly)}
+            >
+              {significantOnly
+                ? <Check className="size-4" aria-hidden />
+                : <ListFilter className="size-4" aria-hidden />}
+              Significant only
+            </Button>
+          </>
+        )}
+        search={(
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Find a gene"
+            label="Find a gene"
+          />
+        )}
+        customize={customize}
+      />
 
       {visibleResults.length === 0 ? (
         <EmptyExplore
@@ -128,27 +144,39 @@ export function ExploreView({
           onShowRanked={() => onSignificantOnlyChange(false)}
         />
       ) : display === "network" ? (
-        <Suspense
-          fallback={
-            <div
-              role="status"
-              className="surface-card grid h-[min(68vh,720px)] min-h-[31rem] place-items-center text-base font-semibold text-muted"
-            >
-              Drawing interaction network…
-            </div>
-          }
-        >
-          <InteractionNetwork
-            results={networkResults}
-            totalResults={visibleResults.length}
+        <div className="view-enter" key="network">
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="surface-card grid h-[min(68vh,720px)] min-h-[31rem] place-items-center text-base font-semibold text-muted"
+              >
+                Drawing interaction network…
+              </div>
+            }
+          >
+            <InteractionNetwork
+              results={networkResults}
+              totalResults={visibleResults.length}
+              mode={mode}
+              qThreshold={qThreshold}
+              likelyPassengers={likelyPassengers}
+              highlightLikelyPassengers={highlightLikelyPassengers}
+              onSelect={onSelect}
+            />
+          </Suspense>
+        </div>
+      ) : (
+        <div className="view-enter" key="list">
+          <InteractionList
+            results={visibleResults}
             mode={mode}
             qThreshold={qThreshold}
-            query={query}
+            likelyPassengers={likelyPassengers}
+            highlightLikelyPassengers={highlightLikelyPassengers}
             onSelect={onSelect}
           />
-        </Suspense>
-      ) : (
-        <InteractionList results={visibleResults} mode={mode} qThreshold={qThreshold} onSelect={onSelect} />
+        </div>
       )}
     </section>
   );

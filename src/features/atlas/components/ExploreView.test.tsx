@@ -23,12 +23,15 @@ describe("ExploreView", () => {
         significantOnly
         onDisplayChange={() => undefined}
         onSignificantOnlyChange={onSignificantOnlyChange}
+        customize={<button type="button">Customize</button>}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={() => undefined}
       />,
     );
 
     expect(screen.getByText("No pairs meet q < 0.01.")).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Explore display" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Explore display" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /significant interactions/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /direction/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show ranked pairs" }));
@@ -45,6 +48,9 @@ describe("ExploreView", () => {
         significantOnly={false}
         onDisplayChange={() => undefined}
         onSignificantOnlyChange={() => undefined}
+        customize={<button type="button">Customize</button>}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         onSelect={() => undefined}
       />,
     );

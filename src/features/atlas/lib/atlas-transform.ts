@@ -12,18 +12,6 @@ import {
   type PairSelection,
 } from "@/features/atlas/types";
 
-export const BMR_LABEL: Record<Bmr, string> = {
-  cbase: "CBaSE",
-  dig: "DIG",
-  mutsig: "MutSigCV2",
-};
-
-export const STUDY_LABEL: Record<string, string> = {
-  TCGA: "TCGA PanCan Atlas",
-  "MSK-IMPACT": "MSK-IMPACT",
-  "MSK-CHORD": "MSK-CHORD",
-};
-
 export const baseGene = (geneEffect: string) => geneEffect.replace(/_[MN]$/, "");
 
 export function pairKey(ga: string, gb: string): string {
@@ -290,16 +278,20 @@ export function resultQ(result: InteractionResult, mode: AtlasMode): number {
   return Math.max(...result.matches.map(({ row }) => row.q ?? 1));
 }
 
-/** Number of distinct background models supporting the result at the selected q cutoff. */
-export function modelAgreement(
+/** Independent background support after excluding any MutSigCV2 CBaSE fallback. */
+export function backgroundSupport(
   result: InteractionResult,
   qThreshold = DEFAULT_Q_THRESHOLD,
-): number {
-  return result.matches.filter(
+): { significant: number; independent: number } {
+  const hasMutsigFallback = result.mutsigFallbackFeatures.length > 0;
+  return {
+    significant: result.matches.filter(
     ({ bmr, row }) =>
       isSignificant(row, qThreshold) &&
-      !(bmr === "mutsig" && result.mutsigFallbackFeatures.length > 0),
-  ).length;
+        !(bmr === "mutsig" && hasMutsigFallback),
+    ).length,
+    independent: BMR_IDS.length - (hasMutsigFallback ? 1 : 0),
+  };
 }
 
 export function findResult(data: CohortData, selection: PairSelection): InteractionResult | null {

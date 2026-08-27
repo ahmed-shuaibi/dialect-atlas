@@ -36,7 +36,7 @@ export const DialogContent = React.forwardRef<
       className={cn(
         "fixed z-50 overflow-x-hidden overflow-y-auto border border-line bg-paper text-ink outline-none duration-300 data-[state=closed]:animate-out data-[state=open]:animate-in",
         variant === "drawer"
-          ? "inset-0 h-dvh w-full max-w-none border-0 p-6 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:inset-y-0 sm:left-auto sm:right-0 sm:h-auto sm:w-[min(92vw,28rem)] sm:border sm:border-y-0 sm:border-r-0 sm:p-7"
+          ? "bottom-0 left-0 right-0 max-h-[92dvh] rounded-t-[2rem] p-6 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:bottom-3 sm:left-auto sm:right-0 sm:top-3 sm:max-h-none sm:w-[min(92vw,28rem)] sm:rounded-l-[2rem] sm:rounded-r-none sm:border sm:border-r-0 sm:p-7 sm:data-[state=closed]:slide-out-to-right sm:data-[state=open]:slide-in-from-right"
           : variant === "wide"
             ? "bottom-0 left-0 right-0 max-h-[96dvh] rounded-t-[28px] p-5 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[92vh] sm:w-[min(96vw,72rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:p-7 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
             : "bottom-0 left-0 right-0 max-h-[92vh] rounded-t-[2rem] p-6 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[86vh] sm:w-[min(92vw,46rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[2rem] sm:p-8 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
@@ -44,10 +44,10 @@ export const DialogContent = React.forwardRef<
       )}
       {...props}
     >
-      <div className="pointer-events-none sticky top-0 z-30 flex h-0 justify-end">
+      <div className="pointer-events-none absolute right-4 top-4 z-30">
         <DialogPrimitive.Close
           aria-label="Close"
-          className="focus-ring pointer-events-auto grid size-10 -translate-y-1 place-items-center rounded-full border border-line bg-paper/95 text-muted shadow-sm backdrop-blur transition-colors hover:bg-sand hover:text-ink"
+          className="focus-ring pointer-events-auto grid size-10 place-items-center rounded-full border border-line bg-paper/95 text-muted shadow-sm backdrop-blur transition-colors hover:bg-sand hover:text-ink"
         >
           <X className="size-5" aria-hidden />
         </DialogPrimitive.Close>

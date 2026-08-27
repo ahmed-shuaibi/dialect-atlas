@@ -11,6 +11,9 @@
 /data/releases/k100-2026-08-26/*
   Cache-Control: public, max-age=31556952, immutable
 
+/data/annotations/likely-passengers-v1.json
+  Cache-Control: public, max-age=31556952, immutable
+
 https://:project.pages.dev/*
   X-Robots-Tag: noindex
 

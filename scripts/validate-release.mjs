@@ -14,6 +14,11 @@ import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath, URL } from "node:url";
 
 const RELEASE_ID = "k100-2026-08-26";
+const LIKELY_PASSENGER_FILE = "annotations/likely-passengers-v1.json";
+const LIKELY_PASSENGER_SHA256 =
+  "c8efd1f97359669ff21146e9ebcb61eaa6c109a1e22688beda291666c24e6cc2";
+const ONCOKB_REFERENCE_SHA256 =
+  "56cea460e396451395738dbb8dbda5f5a8fe6fb146dde18c902c8b6bd6034193";
 const BASELINE_RELEASE_ID = "dialect-atlas-baselines-k100";
 const BASELINE_SCHEMA_VERSION = "1.0";
 const BASELINE_RELEASE_SEED = 20260826;
@@ -299,6 +304,57 @@ function validGeneEffect(value) {
 
 function validBaseGene(value) {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value);
+}
+
+async function validateLikelyPassengerAnnotations(releaseRoot, expectedCohortIds) {
+  const dataRoot = resolve(releaseRoot, "../..");
+  const buffer = await readCanonicalFile(
+    dataRoot,
+    LIKELY_PASSENGER_FILE,
+    LIKELY_PASSENGER_FILE,
+    "likely-passenger annotations",
+  );
+  assertPortableJson(buffer, "likely-passenger annotations");
+  assert(
+    sha256(buffer) === LIKELY_PASSENGER_SHA256,
+    "likely-passenger annotation SHA-256 mismatch",
+  );
+  const annotations = JSON.parse(buffer);
+  assertExactKeys(
+    annotations,
+    [
+      "annotation_id",
+      "schema_version",
+      "definition",
+      "driver_reference",
+      "driver_reference_sha256",
+      "cohorts",
+    ],
+    "likely-passenger annotations",
+  );
+  assert(annotations.annotation_id === "likely-passengers-v1", "likely-passenger annotation ID mismatch");
+  assert(annotations.schema_version === "1.0.0", "likely-passenger annotation schema mismatch");
+  assert(
+    annotations.driver_reference === "data/references/OncoKB_Cancer_Gene_List.tsv" &&
+      annotations.driver_reference_sha256 === ONCOKB_REFERENCE_SHA256,
+    "likely-passenger driver-reference provenance mismatch",
+  );
+  assert(
+    annotations.cohorts && typeof annotations.cohorts === "object" && !Array.isArray(annotations.cohorts),
+    "likely-passenger cohorts must be an object",
+  );
+  const cohortIds = Object.keys(annotations.cohorts);
+  assert(sameArray(cohortIds, expectedCohortIds), "likely-passenger cohort identity/order mismatch");
+  let featureCount = 0;
+  for (const cohortId of cohortIds) {
+    const features = annotations.cohorts[cohortId];
+    assert(Array.isArray(features), `${cohortId}: likely-passenger features must be an array`);
+    assert(features.length > 0 && features.length <= 100, `${cohortId}: likely-passenger count invalid`);
+    assert(new Set(features).size === features.length, `${cohortId}: duplicate likely-passenger feature`);
+    assert(features.every(validGeneEffect), `${cohortId}: invalid likely-passenger gene effect`);
+    featureCount += features.length;
+  }
+  assert(featureCount === 4351, "likely-passenger feature coverage mismatch");
 }
 
 function expectedCancerName(study, cohort) {
@@ -1566,6 +1622,7 @@ async function validateRelease(root) {
   assert(sameArray(orderedIds, EXPECTED_COHORT_IDS), "canonical cohort identity/order drift");
   const ids = new Set(orderedIds);
   assert(ids.size === 71, "duplicate cohort IDs");
+  await validateLikelyPassengerAnnotations(root, orderedIds);
   assert(
     manifest.coverage.mutsig_cbase_fallback_feature_instances ===
       index.cohorts.reduce(

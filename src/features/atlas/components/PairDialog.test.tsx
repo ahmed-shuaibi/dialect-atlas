@@ -57,7 +57,8 @@ function dialogFor(data: CohortData, qThreshold = 0.01) {
   return render(
     <PairDialog
       result={result}
-      data={data}
+      likelyPassengers={new Set()}
+      highlightLikelyPassengers={false}
       mode="cbase"
       qThreshold={qThreshold}
       open
@@ -93,7 +94,7 @@ describe("PairDialog model evidence", () => {
     dialogFor(data);
 
     expect(screen.getByText("Significant with CBaSE")).toBeInTheDocument();
-    expect(screen.getByText(/1\/3 distinct backgrounds agree on ME; 1\/3 meet/)).toBeInTheDocument();
+    expect(screen.getByText("1 of 3 meet q < 0.01.")).toBeInTheDocument();
     const dig = screen.getAllByText("DIG")[0].closest("article");
     const mutsig = screen.getAllByText("MutSigCV2")[0].closest("article");
     expect(dig).not.toBeNull();
@@ -148,7 +149,8 @@ describe("PairDialog model evidence", () => {
     render(
       <PairDialog
         result={result}
-        data={data}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         mode="dig"
         qThreshold={0.01}
         open
@@ -167,7 +169,8 @@ describe("PairDialog model evidence", () => {
     render(
       <PairDialog
         result={result}
-        data={data}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.01}
         open
@@ -175,8 +178,8 @@ describe("PairDialog model evidence", () => {
       />,
     );
 
-    expect(screen.getByText("Significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/3\/3 distinct backgrounds agree on ME; 3\/3 meet/)).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 meet q < 0.01.")).toBeInTheDocument();
     expect(screen.getByText("Technical details")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
@@ -188,7 +191,8 @@ describe("PairDialog model evidence", () => {
     const view = render(
       <PairDialog
         result={result}
-        data={data}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.01}
         open
@@ -196,13 +200,14 @@ describe("PairDialog model evidence", () => {
       />,
     );
 
-    expect(screen.getByText("Not significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText("3/3 distinct backgrounds agree on ME; 0/3 meet q < 0.01.")).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
+    expect(screen.getByText("0 of 3 meet q < 0.01.")).toBeInTheDocument();
 
     view.rerender(
       <PairDialog
         result={result}
-        data={data}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.05}
         open
@@ -210,8 +215,8 @@ describe("PairDialog model evidence", () => {
       />,
     );
 
-    expect(screen.getByText("Significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText("3/3 distinct backgrounds agree on ME; 3/3 meet q < 0.05.")).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 meet q < 0.05.")).toBeInTheDocument();
   });
 
   it("explains why a significant MutSig fallback row is not all-three support", () => {
@@ -225,7 +230,8 @@ describe("PairDialog model evidence", () => {
     render(
       <PairDialog
         result={result}
-        data={data}
+        likelyPassengers={new Set()}
+        highlightLikelyPassengers={false}
         mode="consensus"
         qThreshold={0.01}
         open
@@ -233,10 +239,10 @@ describe("PairDialog model evidence", () => {
       />,
     );
 
-    expect(screen.getByText("Not supported by 3 distinct backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/2\/2 distinct backgrounds agree on ME; 2\/2 meet/)).toBeInTheDocument();
+    expect(screen.getByText("2 of 2 backgrounds agree")).toBeInTheDocument();
+    expect(screen.getByText("2 of 2 meet q < 0.01.")).toBeInTheDocument();
     expect(
-      screen.getByText(/reuses the CBaSE background for A_M.*does not count as distinct/),
+      screen.getByText("MutSigCV2 uses CBaSE fallback for A_M."),
     ).toBeInTheDocument();
   });
 });

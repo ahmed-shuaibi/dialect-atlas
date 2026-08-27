@@ -90,10 +90,20 @@ const manifest = {
   schema_version: "2.0.0",
   immutable: true,
   generated_at: "2026-08-26T12:00:00Z",
-  coverage: { cohorts: 1 },
-  analysis: { k: 100 },
-  bmrs: ["cbase", "dig", "mutsig"],
-  methods: ["fisher", "discover", "megsa", "wesme_wesco"],
+  coverage: { cohorts: 1, samples: 561 },
+  analysis: { top_k_event_features: 100, fdr_threshold: 0.01 },
+  bmrs: [
+    { id: "cbase", label: "CBaSE", role: "primary" },
+    { id: "dig", label: "DIG", role: "robustness" },
+    { id: "mutsig", label: "MutSigCV2", role: "robustness" },
+  ],
+  methods: {
+    dialect: { directions: ["ME", "CO"] },
+    fisher: { directions: ["ME", "CO"] },
+    discover: { directions: ["ME", "CO"] },
+    megsa: { directions: ["ME"] },
+    wesme_wesco: { directions: ["ME", "CO"] },
+  },
   index_file: "index.json",
   readme_file: "README.md",
   readme_sha256: "abc",
@@ -165,6 +175,15 @@ const cohort = {
   },
 };
 
+const likelyPassengers = {
+  annotation_id: "likely-passengers-v1",
+  schema_version: "1.0.0",
+  definition: "fixture",
+  driver_reference: "drivers.tsv",
+  driver_reference_sha256: "a".repeat(64),
+  cohorts: { TCGA__LUAD: ["BRAF_M"] },
+};
+
 function json(value: unknown) {
   return { ok: true, status: 200, json: async () => value } as Response;
 }
@@ -176,6 +195,7 @@ function installFetch(cohortPayload: typeof cohort = cohort) {
       const url = String(input);
       if (url.endsWith("manifest.json")) return json(manifest);
       if (url.endsWith("index.json")) return json(index);
+      if (url.endsWith("likely-passengers-v1.json")) return json(likelyPassengers);
       if (url.endsWith("TCGA__LUAD.json")) return json(cohortPayload);
       return { ok: false, status: 404, json: async () => ({}) } as Response;
     }),
@@ -209,11 +229,11 @@ describe("Atlas v2 critical flow", () => {
     installFetch();
   });
 
-  it("chooses cancer then cohort, defaults to both ranked lanes, and opens addressable evidence", async () => {
+  it("chooses study then cancer, defaults to both ranked lanes, and opens addressable evidence", async () => {
     const user = userEvent.setup();
     const { container } = renderApp();
 
-    expect(await screen.findByRole("heading", { name: "Choose a cancer." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Choose a study." })).toBeInTheDocument();
     const navigation = screen.getByRole("navigation", { name: "Primary" });
     const brand = screen.getByRole("link", { name: "DIALECT Atlas" });
     expect(brand.querySelector('img[src*="dialect-icon.png"]')).toHaveClass("sm:hidden");
@@ -221,21 +241,21 @@ describe("Atlas v2 critical flow", () => {
     expect(
       within(navigation)
         .getAllByRole("link")
-        .slice(0, 3)
+        .slice(0, 4)
         .map((link) => link.textContent),
-    ).toEqual(["About", "Explore", "Compare"]);
+    ).toEqual(["About", "Explore", "Compare", "Contact"]);
 
-    await user.click(screen.getByRole("button", { name: /^Lung\b/ }));
-    expect(await screen.findByText("Choose a study cohort.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /TCGA PanCan Atlas/ }));
+    expect(await screen.findByText("Choose a cancer type.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Lung adenocarcinoma/ }));
 
-    expect(await screen.findByRole("heading", { name: "Lung adenocarcinoma" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Explore / Lung adenocarcinoma" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Significant only" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
     expect(screen.getByText("561").parentElement).toHaveTextContent("561 tumors");
-    expect(screen.getByRole("button", { name: "Change cancer or cohort" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change study or cancer" })).toBeInTheDocument();
     expect(screen.queryByText(/All 3 backgrounds.*q/)).not.toBeInTheDocument();
     expect(window.location.hash).toContain("cohort=TCGA__LUAD");
 
@@ -248,8 +268,8 @@ describe("Atlas v2 critical flow", () => {
     expect(pair).not.toBeNull();
     await user.click(pair!);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/3\/3 distinct backgrounds agree on ME; 3\/3 meet q < 0\.01/)).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 meet q < 0.01.")).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=ME%3A%3AKRAS_M%3A%3ATP53_M");
   });
 
@@ -268,7 +288,7 @@ describe("Atlas v2 critical flow", () => {
       "ME::KRAS_M::TP53_M",
     ]);
 
-    await user.click(screen.getByRole("button", { name: "Network" }));
+    await user.click(screen.getByRole("radio", { name: "Network" }));
     const network = await screen.findByRole("region", {
       name: "Interaction network",
     });
@@ -331,7 +351,8 @@ describe("Atlas v2 critical flow", () => {
 
     const ranked = renderApp();
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Not significant under all 3 backgrounds")).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 backgrounds agree")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 meet q < 0.01.")).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=");
 
     ranked.unmount();
@@ -358,24 +379,30 @@ describe("Atlas v2 critical flow", () => {
     const user = userEvent.setup();
     renderApp();
 
-    expect(await screen.findByRole("heading", { name: "Compare methods" })).toBeInTheDocument();
-    const meSection = screen.getByRole("heading", { name: "Mutually exclusive" }).closest("section");
-    expect(meSection).not.toBeNull();
-    expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
-    const table = within(meSection!).getByRole("table");
-    await user.click(within(meSection!).getByRole("button", { name: "Sort by Fisher" }));
-    const fisherHeader = within(meSection!).getByRole("columnheader", { name: /Fisher/ });
+    expect(await screen.findByRole("heading", { name: "Compare / Lung adenocarcinoma" })).toBeInTheDocument();
+    const meSection = await screen.findByRole("region", { name: "Mutually exclusive" });
+    expect(screen.queryByRole("region", { name: "Co-occurring" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Customize Atlas results" }));
+    expect(screen.queryByRole("radio", { name: /^Consensus/ })).not.toBeInTheDocument();
+    expect(screen.getByText("q cutoff")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    const table = within(meSection).getByRole("table");
+    await user.click(within(meSection).getByRole("button", { name: "Sort by Fisher" }));
+    const fisherHeader = within(meSection)
+      .getByRole("button", { name: "Sort by Fisher" })
+      .closest("th");
+    expect(fisherHeader).not.toBeNull();
     expect(fisherHeader).toHaveAttribute("aria-sort", "ascending");
     expect(within(table).getAllByRole("row")[1]).toHaveTextContent("ALK_M / ROS1_M");
-    expect(within(meSection!).queryByRole("button", { name: "ALK_M / ROS1_M" })).not.toBeInTheDocument();
+    expect(within(meSection).queryByRole("button", { name: "ALK_M / ROS1_M" })).not.toBeInTheDocument();
 
-    await user.click(within(meSection!).getByRole("button", { name: "Sort by Fisher" }));
+    await user.click(within(meSection).getByRole("button", { name: "Sort by Fisher" }));
     expect(fisherHeader).toHaveAttribute("aria-sort", "descending");
-    await user.click(within(meSection!).getAllByRole("button", { name: "BRAF_M / NRAS_M" })[0]);
+    await user.click(within(meSection).getAllByRole("button", { name: "BRAF_M / NRAS_M" })[0]);
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Not significant under all 3 backgrounds")).toBeInTheDocument();
-    expect(screen.getByText(/1\/3 distinct backgrounds agree on ME; 1\/3 meet q < 0\.01/)).toBeInTheDocument();
+    expect(screen.getByText("1 of 3 backgrounds agree")).toBeInTheDocument();
+    expect(screen.getByText("1 of 3 meet q < 0.01.")).toBeInTheDocument();
     expect(window.location.hash).toContain("pair=ME%3A%3ABRAF_M%3A%3ANRAS_M");
   });
 

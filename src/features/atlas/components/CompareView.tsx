@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ExternalLink } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { EvidenceStatus, type EvidenceState } from "@/components/ui/evidence-status";
 import { SearchField } from "@/components/ui/search-field";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Tooltip,
   TooltipContent,
@@ -17,10 +18,22 @@ import {
   type CompareMethodId,
   type CompareSortDirection,
 } from "@/features/atlas/components/compare-detail";
+import { ResultsToolbar } from "@/features/atlas/components/ResultsToolbar";
+import { DIRECTION_METADATA } from "@/features/atlas/lib/atlas-metadata";
 import { fmtQ } from "@/features/atlas/lib/atlas-transform";
-import type { CohortData, Direction, InteractionResult } from "@/features/atlas/types";
+import type {
+  CohortData,
+  Direction,
+  InteractionResult,
+  ReleaseManifest,
+} from "@/features/atlas/types";
+import { cn } from "@/lib/utils";
 
 const DISPLAY_LIMIT = 30;
+const DIRECTION_OPTIONS = [
+  { value: "ME", label: "Mutually exclusive" },
+  { value: "CO", label: "Co-occurring" },
+] as const;
 
 function EvidenceMark({
   evidence,
@@ -61,19 +74,35 @@ function EvidenceMark({
   );
 }
 
+function PassengerMarker({ features }: { features: string[] }) {
+  if (features.length === 0) return null;
+  return (
+    <span className="ml-2 inline-flex align-middle">
+      <span className="size-2 rounded-full bg-passenger" aria-hidden />
+      <span className="sr-only">
+        Likely passenger gene effect: {features.join(", ")}
+      </span>
+    </span>
+  );
+}
+
 function ComparisonSection({
   data,
   manifestMethods,
   direction,
   qThreshold,
   query,
+  likelyPassengers,
+  highlightLikelyPassengers,
   onSelect,
 }: {
   data: CohortData;
-  manifestMethods: unknown;
+  manifestMethods: ReleaseManifest["methods"];
   direction: Direction;
   qThreshold: number;
   query: string;
+  likelyPassengers: ReadonlySet<string>;
+  highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
 }) {
   const methods = useMemo(
@@ -116,14 +145,11 @@ function ComparisonSection({
   };
 
   return (
-    <section aria-labelledby={`compare-${direction}`}>
-      <div className="mb-4 flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h3 id={`compare-${direction}`} className="text-2xl font-semibold">
-            {direction === "ME" ? "Mutually exclusive" : "Co-occurring"}
-          </h3>
-          <p className="mt-1 text-sm text-muted">{filtered.length} pairs supported by at least one method</p>
-        </div>
+    <section aria-label={DIRECTION_METADATA[direction].label}>
+      <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-semibold text-muted">
+          <span className="font-mono text-ink">{filtered.length}</span> pairs supported by at least one method
+        </p>
         <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto md:hidden">
           <label className="min-w-0 flex-1 sm:flex-none">
             <span className="sr-only">Sort {direction} comparison by</span>
@@ -131,7 +157,9 @@ function ComparisonSection({
               aria-label={`Sort ${direction} comparison by`}
               value={sortMethod}
               onChange={(event) => {
-                setSortMethod(event.target.value as CompareMethodId);
+                const method = methods.find(({ id }) => id === event.target.value);
+                if (!method) return;
+                setSortMethod(method.id);
                 setSortDirection("ascending");
               }}
               className="focus-ring h-10 w-full min-w-0 rounded-full border border-line bg-paper px-3 text-sm font-semibold outline-none sm:w-auto"
@@ -163,7 +191,7 @@ function ComparisonSection({
             <table className="w-full table-fixed border-collapse text-[15px]">
               <caption className="sr-only">{direction} pairs supported by at least one displayed method</caption>
               <colgroup>
-                <col className="w-[25%]" />
+                <col className="w-[20%]" />
                 {methods.map((method) => <col key={method.id} />)}
               </colgroup>
               <thead className="bg-sand/70">
@@ -173,23 +201,45 @@ function ComparisonSection({
                     const active = sortMethod === method.id;
                     return (
                       <th key={method.id} aria-sort={active ? sortDirection : "none"} className="px-1 py-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => chooseSort(method.id)}
-                          className="focus-ring inline-flex max-w-full items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-semibold hover:bg-paper"
-                          aria-label={`Sort by ${method.label}`}
-                        >
-                          <span className="truncate">{method.label}</span>
-                          {active && (sortDirection === "ascending" ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />)}
-                        </button>
+                        <span className="inline-flex max-w-full items-center justify-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => chooseSort(method.id)}
+                            className="focus-ring inline-flex min-w-0 items-center justify-center gap-1.5 rounded-full px-1 py-1.5 text-xs font-semibold hover:bg-paper"
+                            aria-label={`Sort by ${method.label}`}
+                          >
+                            <span className="truncate">{method.label}</span>
+                            {active && (sortDirection === "ascending" ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />)}
+                          </button>
+                          <a
+                            href={method.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`Read the ${method.label} method`}
+                            className="focus-ring grid size-6 shrink-0 place-items-center rounded-full text-muted hover:bg-paper hover:text-ink"
+                          >
+                            <ExternalLink className="size-3" aria-hidden />
+                          </a>
+                        </span>
                       </th>
                     );
                   })}
                 </tr>
               </thead>
               <tbody>
-                {shown.map((row) => (
-                  <tr key={row.id} className="border-t border-line transition-colors hover:bg-sand/45">
+                {shown.map((row) => {
+                  const passengerFeatures = highlightLikelyPassengers
+                    ? [row.ga, row.gb].filter((feature) => likelyPassengers.has(feature))
+                    : [];
+                  const likelyPassenger = passengerFeatures.length > 0;
+                  return (
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      "border-t border-line transition-colors hover:bg-sand/45",
+                      likelyPassenger && "bg-passenger-soft/65",
+                    )}
+                  >
                     <th className="px-5 py-3.5 text-left">
                       {row.result ? (
                         <button
@@ -203,6 +253,7 @@ function ComparisonSection({
                       ) : (
                         <span className="block truncate font-mono text-[13px] font-medium">{row.ga} / {row.gb}</span>
                       )}
+                      <PassengerMarker features={passengerFeatures} />
                     </th>
                     {methods.map((method) => (
                       <td key={method.id} className="px-1 py-3 text-center">
@@ -210,14 +261,26 @@ function ComparisonSection({
                       </td>
                     ))}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="space-y-2 md:hidden">
-            {shown.map((row) => (
-              <article key={row.id} className="surface-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5">
+            {shown.map((row) => {
+              const passengerFeatures = highlightLikelyPassengers
+                ? [row.ga, row.gb].filter((feature) => likelyPassengers.has(feature))
+                : [];
+              const likelyPassenger = passengerFeatures.length > 0;
+              return (
+              <article
+                key={row.id}
+                className={cn(
+                  "surface-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5",
+                  likelyPassenger && "border-passenger/40 bg-passenger-soft/65",
+                )}
+              >
                 <div className="min-w-0">
                   {row.result ? (
                     <button type="button" onClick={() => onSelect(row.result!)} className="focus-ring block max-w-full truncate rounded-full font-mono text-[13px] font-medium hover:underline">
@@ -226,11 +289,13 @@ function ComparisonSection({
                   ) : (
                     <p className="truncate font-mono text-[13px] font-medium">{row.ga} / {row.gb}</p>
                   )}
+                  <PassengerMarker features={passengerFeatures} />
                   <p className="mt-1 text-xs font-semibold text-muted">{activeMethod?.label}</p>
                 </div>
                 <EvidenceMark evidence={row.evidence[sortMethod]} direction={direction} />
               </article>
-            ))}
+              );
+            })}
           </div>
 
           {visible < filtered.length && (
@@ -248,36 +313,69 @@ function ComparisonSection({
 
 export type CompareViewProps = {
   data: CohortData;
-  manifestMethods: unknown;
+  manifestMethods: ReleaseManifest["methods"];
   qThreshold: number;
+  direction: Direction;
+  onDirectionChange: (direction: Direction) => void;
+  customize: ReactNode;
+  likelyPassengers: ReadonlySet<string>;
+  highlightLikelyPassengers: boolean;
   onSelect: (result: InteractionResult) => void;
 };
 
-export function CompareView({ data, manifestMethods, qThreshold, onSelect }: CompareViewProps) {
+export function CompareView({
+  data,
+  manifestMethods,
+  qThreshold,
+  direction,
+  onDirectionChange,
+  customize,
+  likelyPassengers,
+  highlightLikelyPassengers,
+  onSelect,
+}: CompareViewProps) {
   const [query, setQuery] = useState("");
   useEffect(() => setQuery(""), [data.id]);
 
   return (
     <TooltipProvider delayDuration={120}>
-      <section aria-labelledby="compare-title">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <h2 id="compare-title" className="text-[clamp(2rem,4vw,3.2rem)] font-semibold leading-none tracking-[-0.035em]">
-            Compare methods
-          </h2>
-          <SearchField value={query} onChange={setQuery} placeholder="Find a gene" label="Search compared gene pairs" className="w-full sm:w-64" />
-        </div>
-        <div className="space-y-12">
-          {(["ME", "CO"] as const).map((direction) => (
-            <ComparisonSection
-              key={direction}
-              data={data}
-              manifestMethods={manifestMethods}
-              direction={direction}
-              qThreshold={qThreshold}
-              query={query}
-              onSelect={onSelect}
+      <section aria-label="Method comparison">
+        <ResultsToolbar
+          controls={(
+            <SegmentedControl
+              value={direction}
+              options={DIRECTION_OPTIONS}
+              onChange={onDirectionChange}
+              label="Interaction direction"
             />
-          ))}
+          )}
+          search={(
+            <SearchField
+              value={query}
+              onChange={setQuery}
+              placeholder="Find a gene"
+              label="Search compared gene pairs"
+            />
+          )}
+          customize={customize}
+        />
+        {highlightLikelyPassengers && (
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted">
+            <span className="size-2.5 rounded-full bg-passenger" aria-hidden />
+            Likely passenger gene effect
+          </div>
+        )}
+        <div className="view-enter" key={direction}>
+          <ComparisonSection
+            data={data}
+            manifestMethods={manifestMethods}
+            direction={direction}
+            qThreshold={qThreshold}
+            query={query}
+            likelyPassengers={likelyPassengers}
+            highlightLikelyPassengers={highlightLikelyPassengers}
+            onSelect={onSelect}
+          />
         </div>
       </section>
     </TooltipProvider>

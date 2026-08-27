@@ -120,6 +120,29 @@ describe("decodeCohort", () => {
     ).toThrow(DataContractError);
   });
 
+  it.each([null, false, ""])(
+    "rejects required numeric fields encoded as %j",
+    (invalid) => {
+      const invalidRow: unknown[] = [...row()];
+      invalidRow[2] = invalid;
+      expect(() =>
+        decodeCohort({
+          id: "bad-number",
+          drivers: [],
+          models: {
+            cbase: { fields: DIALECT_FIELDS, rows: [invalidRow] },
+            dig: { fields: DIALECT_FIELDS, rows: [] },
+            mutsig: { fields: DIALECT_FIELDS, rows: [] },
+          },
+          baselines: { fields: BASELINE_FIELDS, rows: [] },
+          testing_universes: {
+            models: { mutsig: { origins: { cbase_fallback: [] } } },
+          },
+        }),
+      ).toThrow(/tau00 must be a finite number/);
+    },
+  );
+
   it("fails closed when a required BMR or baseline table is missing", () => {
     expect(() =>
       decodeCohort({

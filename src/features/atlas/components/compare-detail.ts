@@ -1,10 +1,14 @@
 import {
-  BMR_LABEL,
   baseGene,
   codePointCompare,
   findResult,
   pairKey,
 } from "@/features/atlas/lib/atlas-transform";
+import {
+  BMR_METHODS,
+  COMPARISON_METHODS,
+  type BaselineMethodId,
+} from "@/features/atlas/lib/atlas-metadata";
 import {
   BMR_IDS,
   DEFAULT_Q_THRESHOLD,
@@ -14,9 +18,10 @@ import {
   type DialectRow,
   type Direction,
   type InteractionResult,
+  type ReleaseManifest,
 } from "@/features/atlas/types";
 
-export type CompareMethodId = Bmr | "fisher" | "discover" | "megsa" | "wes";
+export type CompareMethodId = Bmr | BaselineMethodId;
 export type CompareSortDirection = "ascending" | "descending";
 
 export type CompareMethod = {
@@ -24,6 +29,7 @@ export type CompareMethod = {
   label: string;
   measure: "q" | "p";
   threshold: number;
+  href: string;
 };
 
 export type CompareEvidence = {
@@ -40,73 +46,41 @@ export type ComparisonRow = {
   ga: string;
   gb: string;
   result: InteractionResult | null;
-  evidence: Record<CompareMethodId, CompareEvidence | undefined>;
+  evidence: Partial<Record<CompareMethodId, CompareEvidence>>;
   stableIndex: number;
 };
 
-function normalizeMethod(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function methodTokens(value: unknown): Set<string> {
-  const tokens = new Set<string>();
-  const add = (item: unknown) => {
-    if (typeof item === "string") {
-      tokens.add(normalizeMethod(item));
-      return;
-    }
-    if (item && typeof item === "object") {
-      const record = item as Record<string, unknown>;
-      add(record.id ?? record.name ?? record.method ?? record.label);
-    }
-  };
-  if (Array.isArray(value)) value.forEach(add);
-  else if (value && typeof value === "object") {
-    Object.keys(value as Record<string, unknown>).forEach(add);
-  }
-  if (tokens.has("wesmewesco")) {
-    tokens.add("wesme");
-    tokens.add("wesco");
-  }
-  return tokens;
-}
-
-function methodAvailable(tokens: Set<string>, name: string): boolean {
-  if (tokens.size === 0) return true;
-  const target = normalizeMethod(name);
-  return [...tokens].some(
-    (token) => token === target || token.includes(target) || target.includes(token),
-  );
+function isBmrMethod(id: CompareMethodId): id is Bmr {
+  return BMR_IDS.some((bmr) => bmr === id);
 }
 
 export function comparisonMethods(
   direction: Direction,
-  manifestMethods: unknown,
+  manifestMethods: ReleaseManifest["methods"],
   qThreshold = DEFAULT_Q_THRESHOLD,
 ): CompareMethod[] {
-  const tokens = methodTokens(manifestMethods);
-  const methods: CompareMethod[] = BMR_IDS.map((id) => ({
-    id,
-    label: BMR_LABEL[id],
-    measure: "q" as const,
-    threshold: qThreshold,
-  }));
-  if (methodAvailable(tokens, "fisher")) {
-    methods.push({ id: "fisher", label: "Fisher", measure: "q", threshold: qThreshold });
-  }
-  if (methodAvailable(tokens, "discover")) {
-    methods.push({ id: "discover", label: "DISCOVER", measure: "q", threshold: qThreshold });
-  }
-  if (direction === "ME" && methodAvailable(tokens, "megsa")) {
-    methods.push({ id: "megsa", label: "MEGSA", measure: "p", threshold: 0.001 });
-  }
-  const wesName = direction === "ME" ? "wesme" : "wesco";
-  if (methodAvailable(tokens, wesName)) {
+  const methods: CompareMethod[] = manifestMethods.dialect.directions.includes(direction)
+    ? BMR_IDS.map((id) => ({
+        id,
+        label: BMR_METHODS[id].label,
+        measure: "q" as const,
+        threshold: qThreshold,
+        href: BMR_METHODS[id].href,
+      }))
+    : [];
+  for (const metadata of Object.values(COMPARISON_METHODS)) {
+    if (
+      !metadata.directions.includes(direction) ||
+      !manifestMethods[metadata.id].directions.includes(direction)
+    ) {
+      continue;
+    }
     methods.push({
-      id: "wes",
-      label: direction === "ME" ? "WeSME" : "WeSCO",
-      measure: "q",
-      threshold: qThreshold,
+      id: metadata.id,
+      label: metadata.directionLabel?.[direction] ?? metadata.label,
+      measure: metadata.measure,
+      threshold: metadata.fixedThreshold ?? qThreshold,
+      href: metadata.href,
     });
   }
   return methods;
@@ -114,7 +88,7 @@ export function comparisonMethods(
 
 function baselineValue(
   row: BaselineRow,
-  method: Exclude<CompareMethodId, Bmr>,
+  method: BaselineMethodId,
   direction: Direction,
 ): number | null {
   if (method === "fisher") return direction === "ME" ? row.fisherMeQ : row.fisherCoQ;
@@ -154,8 +128,9 @@ export function buildComparisonRows(
   const candidates = new Set<string>();
 
   methods.forEach((method) => {
-    if (BMR_IDS.includes(method.id as Bmr)) {
-      modelRows[method.id as Bmr].forEach((row, key) => {
+    const methodId = method.id;
+    if (isBmrMethod(methodId)) {
+      modelRows[methodId].forEach((row, key) => {
         if (row.direction === direction && row.q != null && row.q < method.threshold) {
           candidates.add(key);
         }
@@ -165,7 +140,7 @@ export function buildComparisonRows(
     baselines.forEach((row, key) => {
       const value = baselineValue(
         row,
-        method.id as Exclude<CompareMethodId, Bmr>,
+        methodId,
         direction,
       );
       if (value != null && value < method.threshold) candidates.add(key);
@@ -177,12 +152,13 @@ export function buildComparisonRows(
     .map((key, stableIndex) => {
       const [rawA, rawB] = key.split("::");
       const [ga, gb] = canonicalGenes(rawA, rawB);
-      const evidence = {} as Record<CompareMethodId, CompareEvidence | undefined>;
+      const evidence: ComparisonRow["evidence"] = {};
       methods.forEach((method) => {
-        if (BMR_IDS.includes(method.id as Bmr)) {
-          const row = modelRows[method.id as Bmr].get(key);
+        const methodId = method.id;
+        if (isBmrMethod(methodId)) {
+          const row = modelRows[methodId].get(key);
           const value = row?.q ?? null;
-          evidence[method.id] = {
+          evidence[methodId] = {
             method,
             tested: row != null,
             value,
@@ -190,7 +166,7 @@ export function buildComparisonRows(
               row?.direction === direction && value != null && value < method.threshold,
             assignedDirection: row?.direction,
             fallback:
-              method.id === "mutsig" &&
+              methodId === "mutsig" &&
               row != null &&
               (fallbacks.has(row.ga) || fallbacks.has(row.gb)),
           };
@@ -200,11 +176,11 @@ export function buildComparisonRows(
         const value = baseline
           ? baselineValue(
               baseline,
-              method.id as Exclude<CompareMethodId, Bmr>,
+              methodId,
               direction,
             )
           : null;
-        evidence[method.id] = {
+        evidence[methodId] = {
           method,
           tested: value != null,
           value,

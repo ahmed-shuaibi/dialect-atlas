@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
   AtlasMode,
   AtlasUrlState,
   AtlasView,
+  Direction,
   ExploreDisplay,
   QThreshold,
 } from "@/features/atlas/types";
@@ -15,14 +16,18 @@ export const URL_DEFAULTS: AtlasUrlState = {
   exploreDisplay: "list",
   qThreshold: DEFAULT_Q_THRESHOLD,
   significantOnly: false,
+  compareDirection: "ME",
+  highlightLikelyPassengers: false,
 };
 
 const isView = (value: string | null): value is AtlasView =>
-  value === "explore" || value === "compare" || value === "about";
+  value === "explore" || value === "compare" || value === "about" || value === "contact";
 const isMode = (value: string | null): value is AtlasMode =>
   value === "consensus" || value === "cbase" || value === "dig" || value === "mutsig";
 const isExploreDisplay = (value: string | null): value is ExploreDisplay =>
   value === "network" || value === "list";
+const isDirection = (value: string | null): value is Direction =>
+  value === "ME" || value === "CO";
 const parseQThreshold = (value: string | null): QThreshold => {
   const parsed = Number(value);
   return Q_THRESHOLDS.find((threshold) => threshold === parsed) ?? DEFAULT_Q_THRESHOLD;
@@ -46,6 +51,10 @@ export function parseAtlasHash(hash: string): AtlasUrlState {
       : URL_DEFAULTS.exploreDisplay,
     qThreshold: parseQThreshold(params.get("q")),
     significantOnly: params.get("significant") === "1",
+    compareDirection: isDirection(params.get("direction"))
+      ? params.get("direction") as Direction
+      : URL_DEFAULTS.compareDirection,
+    highlightLikelyPassengers: params.get("passengers") === "1",
   };
 }
 
@@ -59,31 +68,37 @@ export function serializeAtlasHash(state: AtlasUrlState): string {
   params.set("display", state.exploreDisplay);
   if (state.qThreshold !== DEFAULT_Q_THRESHOLD) params.set("q", String(state.qThreshold));
   if (state.significantOnly) params.set("significant", "1");
+  if (state.compareDirection !== URL_DEFAULTS.compareDirection) {
+    params.set("direction", state.compareDirection);
+  }
+  if (state.highlightLikelyPassengers) params.set("passengers", "1");
   return `#${params.toString()}`;
 }
 
 export function useHashState() {
-  const [state, setState] = useState<AtlasUrlState>(() => parseAtlasHash(window.location.hash));
-
-  useEffect(() => {
-    const sync = () => setState(parseAtlasHash(window.location.hash));
-    window.addEventListener("hashchange", sync);
-    window.addEventListener("popstate", sync);
-    return () => {
-      window.removeEventListener("hashchange", sync);
-      window.removeEventListener("popstate", sync);
-    };
-  }, []);
+  const hash = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener("hashchange", onStoreChange);
+      window.addEventListener("popstate", onStoreChange);
+      window.addEventListener("atlas-url-change", onStoreChange);
+      return () => {
+        window.removeEventListener("hashchange", onStoreChange);
+        window.removeEventListener("popstate", onStoreChange);
+        window.removeEventListener("atlas-url-change", onStoreChange);
+      };
+    },
+    () => window.location.hash,
+    () => "",
+  );
+  const state = useMemo(() => parseAtlasHash(hash), [hash]);
 
   const set = useCallback(
     (patch: Partial<AtlasUrlState>, options?: { replace?: boolean }) => {
-      setState((previous) => {
-        const next = { ...previous, ...patch };
-        const url = `${window.location.pathname}${window.location.search}${serializeAtlasHash(next)}`;
-        if (options?.replace) window.history.replaceState(null, "", url);
-        else window.history.pushState(null, "", url);
-        return next;
-      });
+      const next = { ...parseAtlasHash(window.location.hash), ...patch };
+      const url = `${window.location.pathname}${window.location.search}${serializeAtlasHash(next)}`;
+      if (options?.replace) window.history.replaceState(null, "", url);
+      else window.history.pushState(null, "", url);
+      window.dispatchEvent(new Event("atlas-url-change"));
     },
     [],
   );

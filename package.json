@@ -1,12 +1,13 @@
 {
   "name": "dialect-atlas",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
-  "description": "Cancer-first atlas of DIALECT driver mutual exclusivity and co-occurrence.",
+  "description": "Interactive atlas of DIALECT cancer gene-effect interactions.",
   "scripts": {
     "dev": "vite",
     "build": "vite build && npm run validate:deployment",
+    "build:annotations": "node scripts/build-likely-passenger-annotations.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint src scripts",

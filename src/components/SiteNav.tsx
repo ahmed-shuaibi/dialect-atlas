@@ -2,6 +2,7 @@ import { Github, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ui/theme";
 import type { AtlasUrlState, AtlasView } from "@/features/atlas/types";
+import { ATLAS_LINKS } from "@/features/atlas/lib/atlas-metadata";
 import { serializeAtlasHash } from "@/lib/useHashState";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +10,7 @@ const VIEWS: { value: AtlasView; label: string }[] = [
   { value: "about", label: "About" },
   { value: "explore", label: "Explore" },
   { value: "compare", label: "Compare" },
+  { value: "contact", label: "Contact" },
 ];
 
 export function SiteNav({ state }: { state: AtlasUrlState }) {
@@ -50,7 +52,7 @@ export function SiteNav({ state }: { state: AtlasUrlState }) {
                 href={serializeAtlasHash({ ...state, view: view.value, pair: undefined, settings: false })}
                 aria-current={state.view === view.value ? "page" : undefined}
                 className={cn(
-                  "focus-ring rounded-full px-1.5 py-2 text-[12.5px] font-semibold transition-colors sm:px-3.5 sm:text-sm",
+                  "focus-ring rounded-full px-1.5 py-2 text-[11.5px] font-semibold transition-colors min-[380px]:text-[12.5px] sm:px-3.5 sm:text-sm",
                   state.view === view.value
                     ? "bg-paper text-ink shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(24,32,37,0.04)]"
                     : "text-muted hover:bg-paper/70 hover:text-ink",
@@ -60,7 +62,7 @@ export function SiteNav({ state }: { state: AtlasUrlState }) {
               </a>
             ))}
             <a
-              href="https://github.com/raphael-group/dialect"
+              href={ATLAS_LINKS.source}
               target="_blank"
               rel="noreferrer"
               aria-label="DIALECT source code on GitHub"
@@ -71,9 +73,9 @@ export function SiteNav({ state }: { state: AtlasUrlState }) {
             <Button
               type="button"
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={toggleTheme}
-              className="ml-0.5 size-9"
+              className="ml-0.5"
               aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
               title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
             >
