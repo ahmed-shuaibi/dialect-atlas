@@ -28,6 +28,9 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm run check
       - run: npm run build
+        env:
+          ATLAS_BASE_PATH: /
+          ATLAS_SITE_URL: https://dialectcanceratlas.com
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

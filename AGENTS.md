@@ -4,18 +4,19 @@ Interactive companion to the DIALECT manuscript: candidate ME/CO gene-effect
 interactions across **71 cohorts** (TCGA PanCan, MSK-IMPACT, MSK-CHORD) × **3 BMR
 models** (CBaSE, DIG, MutSigCV2).
 
-Public: `ahmed-shuaibi/dialect-atlas` → GitHub Pages. The public K=100 release is
-indexable. Lives under the dialect repo as `atlas/`; data is built from the parent package.
+Public: `https://dialectcanceratlas.com` → GitHub Pages. Cloudflare is DNS-only.
+The public K=100 release is indexable. Lives under the dialect repo as `atlas/`;
+data is built from the parent package.
 
 ## Stack & commands
 
 Vite + React 19 + TypeScript + **Tailwind v4** (tokens in `src/index.css`, no
 tailwind.config) + small Radix/shadcn-style primitives. Hash-URL state. Static build →
-GH Pages (`base: /dialect-atlas/`). Set `ATLAS_BASE_PATH=/` for a custom domain.
+GitHub Pages at the custom-domain root (`base: /`).
 
 ```bash
 npm run dev       # localhost:5173 (base /)
-npm run build     # dist/ for Pages
+npm run build     # custom-domain dist/ + deployment validation
 npm run typecheck
 npm run lint
 npm test

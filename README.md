@@ -3,7 +3,7 @@
 The visual companion to DIALECT, a latent-variable method for evaluating mutual
 exclusivity and co-occurrence between somatic gene-effect pairs in cancer.
 
-[Explore the Atlas](https://ahmed-shuaibi.github.io/dialect-atlas/)
+[Explore the Atlas](https://dialectcanceratlas.com/)
 
 Choose a cancer type and cohort, then explore significant interactions as a
 network or compact ranked list. The default view requires the same pair and
@@ -25,12 +25,17 @@ npm run check
 npm run dev
 ```
 
-The production build keeps the current GitHub Pages subpath and canonical URL
-by default. Build for a custom domain at the site root with:
+The production build targets `https://dialectcanceratlas.com` at the site root.
+The deployment workflow sets the same values explicitly and validates the
+rendered metadata, asset paths, and release files before upload:
 
 ```bash
-ATLAS_BASE_PATH=/ ATLAS_SITE_URL=https://example.org npm run build
+ATLAS_BASE_PATH=/ ATLAS_SITE_URL=https://dialectcanceratlas.com npm run build
 ```
+
+GitHub Pages remains the host and Cloudflare provides authoritative DNS. See
+[`docs/custom-domain.md`](docs/custom-domain.md) for the DNS, TLS, verification,
+cutover, and rollback contract.
 
 The release schema, provenance, thresholds, and field definitions are documented
 inside `public/data/releases/k100-2026-08-26/README.md`.

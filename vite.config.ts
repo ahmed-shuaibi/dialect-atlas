@@ -3,14 +3,14 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 
-// GitHub Pages uses the project subpath. A custom-domain build can set
-// ATLAS_BASE_PATH=/ and ATLAS_SITE_URL without changing source or release data.
-export default defineConfig(({ mode }) => {
+// Production is served from the custom-domain root. Environment overrides keep
+// preview builds portable without changing source or immutable release data.
+export default defineConfig(() => {
   const siteUrl = (
-    process.env.ATLAS_SITE_URL ?? "https://ahmed-shuaibi.github.io/dialect-atlas"
+    process.env.ATLAS_SITE_URL ?? "https://dialectcanceratlas.com"
   ).replace(/\/$/, "");
   return {
-    base: process.env.ATLAS_BASE_PATH ?? (mode === "production" ? "/dialect-atlas/" : "/"),
+    base: process.env.ATLAS_BASE_PATH ?? "/",
     plugins: [
       {
         name: "atlas-site-metadata",

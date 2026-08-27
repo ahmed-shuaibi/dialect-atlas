@@ -1,17 +1,18 @@
 {
   "name": "dialect-atlas",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "description": "Cancer-first atlas of DIALECT driver mutual exclusivity and co-occurrence.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run validate:deployment",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts",
     "test": "vitest run",
     "validate:data": "node scripts/validate-release.mjs",
+    "validate:deployment": "node scripts/validate-deployment.mjs",
     "check": "npm run validate:data && npm test && npm run typecheck && npm run lint"
   },
   "dependencies": {
