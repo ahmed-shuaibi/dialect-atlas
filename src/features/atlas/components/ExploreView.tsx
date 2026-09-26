@@ -6,13 +6,16 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { InteractionList } from "@/features/atlas/components/InteractionList";
 import { ResultsToolbar } from "@/features/atlas/components/ResultsToolbar";
 import { resultsForNetwork } from "@/features/atlas/components/explore-display";
-import { exploreResults, filterResultsByGene } from "@/features/atlas/lib/atlas-transform";
+import { isRevisionRelease, qCutoffLabel } from "@/features/atlas/lib/atlas-metadata";
+import { exploreResults, filterResultsByGene, fmtInt } from "@/features/atlas/lib/atlas-transform";
+import { MATERIALIZED_CAP } from "@/features/atlas/lib/columnar";
 import type {
   AtlasMode,
   BmrCount,
   CohortData,
   ExploreDisplay,
   InteractionResult,
+  ReleaseCatalogEntry,
 } from "@/features/atlas/types";
 
 const InteractionNetwork = lazy(async () => {
@@ -28,6 +31,7 @@ const DISPLAY_OPTIONS = [
 function EmptyExplore({
   query,
   mode,
+  cutoffLabel,
   qThreshold,
   significantOnly,
   onClearQuery,
@@ -35,6 +39,7 @@ function EmptyExplore({
 }: {
   query: string;
   mode: AtlasMode;
+  cutoffLabel: string;
   qThreshold: number;
   significantOnly: boolean;
   onClearQuery: () => void;
@@ -47,9 +52,9 @@ function EmptyExplore({
         {searched
           ? "No pairs match that gene."
           : mode === "consensus"
-            ? "No pairs meet these consensus settings."
+            ? `No pairs meet these ${cutoffLabel.startsWith("BY") ? "overlap" : "consensus"} settings.`
             : significantOnly
-              ? `No pairs meet q < ${qThreshold}.`
+              ? `No pairs meet ${cutoffLabel} ${qThreshold}.`
               : "No pairs in this background."}
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -70,6 +75,7 @@ function EmptyExplore({
 
 export function ExploreView({
   data,
+  release,
   mode,
   display,
   qThreshold,
@@ -84,6 +90,8 @@ export function ExploreView({
   highlightLikelyPassengers,
 }: {
   data: CohortData;
+  /** Absent in isolated renders: fall back to the K=100 copy. */
+  release?: ReleaseCatalogEntry;
   mode: AtlasMode;
   display: ExploreDisplay;
   qThreshold: number;
@@ -119,6 +127,15 @@ export function ExploreView({
     () => filterResultsByGene(results, query),
     [query, results],
   );
+  // K=500 lists are a capped ranked head; name the exact totals for one background.
+  const totals = useMemo(() => {
+    if (!data.countDirectional || mode === "consensus" || query.trim()) return undefined;
+    const threshold = significantOnly ? qThreshold : null;
+    return {
+      ME: data.countDirectional(mode, "ME", threshold),
+      CO: data.countDirectional(mode, "CO", threshold),
+    };
+  }, [data, mode, qThreshold, query, significantOnly]);
   const networkResults = useMemo(
     () => resultsForNetwork(visibleResults),
     [visibleResults],
@@ -160,10 +177,20 @@ export function ExploreView({
         customize={customize}
       />
 
+      {release && isRevisionRelease(release) && data.rankedPerDirection && (
+        <p className="mb-3 text-sm font-medium text-muted">
+          Lists show each direction's ranked head: every pair with {qCutoffLabel(release)} 0.05 and
+          at least the top {fmtInt(data.rankedPerDirection)}, up to {fmtInt(MATERIALIZED_CAP)} per
+          background, of {fmtInt(data.testedPairs ?? 0)} tested. Every pair is in the downloadable
+          release.
+        </p>
+      )}
+
       {visibleResults.length === 0 ? (
         <EmptyExplore
           query={query}
           mode={mode}
+          cutoffLabel={release ? qCutoffLabel(release) : "q <"}
           qThreshold={qThreshold}
           significantOnly={significantOnly}
           onClearQuery={() => setQuery("")}
@@ -198,6 +225,7 @@ export function ExploreView({
         <div className="view-enter" key="list">
           <InteractionList
             results={visibleResults}
+            totals={totals}
             mode={mode}
             qThreshold={qThreshold}
             minIdentifiedBmrs={minIdentifiedBmrs}

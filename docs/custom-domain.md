@@ -62,7 +62,7 @@ hostnames remain non-canonical and receive `X-Robots-Tag: noindex` from
 `public/_headers` is copied into `dist` and is the source of truth for Cloudflare
 response headers. It provides the content security policy and related browser
 protections, immutable one-year caching for fingerprinted assets and the frozen
-K=100 release, and `noindex` for `pages.dev` hosts. Keep HTML outside the immutable
+K=100 and K=500 releases, and `noindex` for `pages.dev` hosts. Keep HTML outside the immutable
 cache rules so a rollback takes effect immediately.
 
 `npm run build` runs `scripts/validate-deployment.mjs` after Vite and fails if the

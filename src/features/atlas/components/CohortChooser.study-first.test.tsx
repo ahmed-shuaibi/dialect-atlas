@@ -5,7 +5,11 @@ import {
   ChangeCohortButton,
   InitialCohortChooser,
 } from "@/features/atlas/components/CohortChooser";
+import { releaseEntry } from "@/features/atlas/lib/release-catalog";
 import type { CohortMeta } from "@/features/atlas/types";
+
+const k100 = releaseEntry("k100-2026-08-26")!;
+const k500 = releaseEntry("k500-2026-09-25")!;
 
 const cohorts: CohortMeta[] = [
   {
@@ -14,6 +18,7 @@ const cohorts: CohortMeta[] = [
     cohort: "CHOL",
     cancer: "Cholangiocarcinoma",
     n_samples: 36,
+    k: 100,
     median_mutations: 42,
     cbio: "https://example.org/tcga-chol",
     data_file: "cohorts/TCGA__CHOL.json",
@@ -26,6 +31,7 @@ const cohorts: CohortMeta[] = [
     cohort: "BRCA",
     cancer: "Breast invasive carcinoma",
     n_samples: 1_084,
+    k: 100,
     median_mutations: 51,
     cbio: "https://example.org/tcga-brca",
     data_file: "cohorts/TCGA__BRCA.json",
@@ -38,6 +44,7 @@ const cohorts: CohortMeta[] = [
     cohort: "Breast_Cancer",
     cancer: "Breast cancer",
     n_samples: 4_201,
+    k: 100,
     median_mutations: 7,
     cbio: "https://example.org/msk-impact-breast",
     data_file: "cohorts/MSK-IMPACT__Breast_Cancer.json",
@@ -50,6 +57,7 @@ const cohorts: CohortMeta[] = [
     cohort: "Pancreatic_Cancer",
     cancer: "Pancreatic cancer",
     n_samples: 211,
+    k: 100,
     median_mutations: 6,
     cbio: "https://example.org/msk-chord-pancreatic",
     data_file: "cohorts/MSK-CHORD__Pancreatic_Cancer.json",
@@ -62,7 +70,7 @@ describe("CohortChooser study-first contract", () => {
   it("requires a keyboard-operable study choice before exposing cancer types", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    render(<InitialCohortChooser cohorts={cohorts} onSelect={onSelect} />);
+    render(<InitialCohortChooser cohorts={cohorts} onSelect={onSelect} release={k100} onReleaseChange={vi.fn()} />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Choose a study." })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search study or cancer" })).toBeInTheDocument();
@@ -86,7 +94,7 @@ describe("CohortChooser study-first contract", () => {
 
   it("shows released cohort identifiers on cancer choices", async () => {
     const user = userEvent.setup();
-    render(<InitialCohortChooser cohorts={cohorts} onSelect={vi.fn()} />);
+    render(<InitialCohortChooser cohorts={cohorts} onSelect={vi.fn()} release={k100} onReleaseChange={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /MSK-IMPACT/ }));
     const breast = screen.getByRole("button", {
@@ -107,7 +115,7 @@ describe("CohortChooser study-first contract", () => {
 
   it("opens and closes the change-cohort dialog from the keyboard", async () => {
     const user = userEvent.setup();
-    render(<ChangeCohortButton cohorts={cohorts} onSelect={vi.fn()} />);
+    render(<ChangeCohortButton cohorts={cohorts} onSelect={vi.fn()} release={k100} onReleaseChange={vi.fn()} />);
     const trigger = screen.getByRole("button", { name: "Change study or cancer" });
 
     trigger.focus();
@@ -121,5 +129,27 @@ describe("CohortChooser study-first contract", () => {
     await user.keyboard("{Enter}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("routes studies published only in another release to that release", async () => {
+    const user = userEvent.setup();
+    const onReleaseChange = vi.fn();
+    render(
+      <InitialCohortChooser
+        cohorts={cohorts.filter((cohort) => cohort.study === "TCGA")}
+        onSelect={vi.fn()}
+        release={k500}
+        onReleaseChange={onReleaseChange}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: "K=500" })).toHaveAttribute("aria-checked", "true");
+    const impact = screen.getByRole("button", { name: /MSK-IMPACT/ });
+    expect(within(impact).getByText("In the K=100 release")).toBeInTheDocument();
+    await user.click(impact);
+    expect(onReleaseChange).toHaveBeenCalledWith("k100-2026-08-26");
+
+    await user.click(screen.getByRole("radio", { name: "K=100" }));
+    expect(onReleaseChange).toHaveBeenLastCalledWith("k100-2026-08-26");
   });
 });

@@ -234,7 +234,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&mode=consensus&display=list",
+      "/#release=k100-2026-08-26&view=explore&mode=consensus&display=list",
     );
     installFetch();
   });
@@ -291,7 +291,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
     const { container } = renderApp();
@@ -314,7 +314,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
     const { container } = renderApp();
@@ -406,7 +406,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKEAP1_M%3A%3ANFE2L2_M&display=list&identify=2&sigbmrs=1",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKEAP1_M%3A%3ANFE2L2_M&display=list&identify=2&sigbmrs=1",
     );
     renderApp();
 
@@ -437,7 +437,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
     renderApp();
@@ -456,7 +456,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
     renderApp();
@@ -482,7 +482,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list",
     );
     const unsupported = structuredClone(cohort);
     unsupported.models.dig.rows[0][17] = 0.02;
@@ -503,7 +503,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list&significant=1",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&pair=ME%3A%3AKRAS_M%3A%3ATP53_M&display=list&significant=1",
     );
     renderApp();
     expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
@@ -517,7 +517,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=compare&cohort=TCGA__LUAD&mode=consensus&display=list",
+      "/#release=k100-2026-08-26&view=compare&cohort=TCGA__LUAD&mode=consensus&display=list",
     );
     const user = userEvent.setup();
     renderApp();
@@ -567,7 +567,7 @@ describe("Atlas v2 critical flow", () => {
     window.history.replaceState(
       null,
       "",
-      "/#view=explore&cohort=TCGA__LUAD&mode=consensus&display=list&significant=1",
+      "/#release=k100-2026-08-26&view=explore&cohort=TCGA__LUAD&mode=consensus&display=list&significant=1",
     );
     const empty = structuredClone(cohort);
     for (const model of Object.values(empty.models)) {
@@ -584,5 +584,59 @@ describe("Atlas v2 critical flow", () => {
     await waitFor(() => expect(window.location.hash).not.toContain("significant="));
     expect(await screen.findByRole("heading", { name: "Mutually exclusive" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Co-occurring" })).toBeInTheDocument();
+  });
+
+  it("opens the K=500 release by default and switches releases without mixing data", async () => {
+    window.history.replaceState(null, "", "/");
+    const k500Manifest = {
+      ...manifest,
+      release_id: "k500-2026-09-25",
+      schema_version: "3.0.0",
+      coverage: { cohorts: 1, samples: 561 },
+      analysis: {
+        top_k_event_features: 500,
+        fdr_threshold: 0.01,
+        fdr_operator: "<=",
+        primary_provider: "mutsig",
+        primary_adjustment: "benjamini-yekutieli",
+        sensitivity_adjustment: "benjamini-hochberg",
+      },
+    };
+    const requested: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requested.push(url);
+        const k500 = url.includes("/k500-2026-09-25/");
+        if (url.endsWith("manifest.json")) return json(k500 ? k500Manifest : manifest);
+        if (url.endsWith("index.json")) {
+          return json(
+            k500
+              ? { release_id: "k500-2026-09-25", cohorts: index.cohorts.map((item) => ({ ...item, k: 500 })) }
+              : index,
+          );
+        }
+        if (url.endsWith("likely-passengers-v1.json")) return json(likelyPassengers);
+        return { ok: false, status: 404, json: async () => ({}) } as Response;
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByRole("heading", { name: "Choose a study." })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "K=500" })).toHaveAttribute("aria-checked", "true");
+    expect(
+      within(screen.getByRole("button", { name: /MSK-IMPACT/ })).getByText("In the K=100 release"),
+    ).toBeInTheDocument();
+    expect(requested.some((url) => url.includes("/k500-2026-09-25/manifest.json"))).toBe(true);
+
+    await user.click(screen.getByRole("radio", { name: "K=100" }));
+    await waitFor(() => expect(window.location.hash).toContain("release=k100-2026-08-26"));
+    expect(window.location.hash).toContain("mode=consensus");
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: "K=100" })).toHaveAttribute("aria-checked", "true"),
+    );
+    expect(requested.some((url) => url.includes("/k100-2026-08-26/manifest.json"))).toBe(true);
   });
 });

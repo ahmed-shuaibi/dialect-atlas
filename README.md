@@ -7,16 +7,22 @@ exclusivity and co-occurrence between somatic gene-effect pairs in cancer.
 
 Choose a study, then a cancer type. Explore ranked mutually exclusive and
 co-occurring interactions in one list or an interactive network, or compare
-DIALECT with Fisher, DISCOVER, MEGSA, WeSME, and WeSCO. The default view requires
-the same pair and direction under CBaSE, DIG, and a real MutSigCV2 background;
-CBaSE fallback features are not counted as MutSigCV2 support. `Significant only`
-defaults to agreement and significance across all three backgrounds. Both minima
-and the q-value cutoff are configurable in the Atlas.
+DIALECT with Fisher, DISCOVER, MEGSA, WeSME, and WeSCO.
 
-The published `k100-2026-08-26` release contains every evaluated pair from up
-to 100 count-ranked, provider-eligible features in each of 71 TCGA, MSK-IMPACT,
-and MSK-CHORD cohorts. Every release file is immutable and SHA-256 verified
-during deployment. A separate, versioned annotation sidecar identifies the exact
+The Atlas serves two immutable releases side by side:
+
+- **`k500-2026-09-25`** (default): the manuscript revision. Every unordered pair of
+  the frozen 500-feature axis in each of the 32 TCGA PanCan Atlas cohorts, under
+  MutSigCV2 (primary), CBaSE (continuity), and DIG (sensitivity). Each background is
+  one complete within-cohort family; calls use Benjamini-Yekutieli `q ≤ cutoff`
+  (primary 0.01), Benjamini-Hochberg is reported as a sensitivity, and cross-background
+  overlap is descriptive only. Tables are columnar gzip shards.
+- **`k100-2026-08-26`**: the original release. Every evaluated pair from up to 100
+  count-ranked features in each of 71 TCGA, MSK-IMPACT, and MSK-CHORD cohorts. Its
+  default view requires agreement under all three backgrounds with strict BH `q <`.
+  MSK cohorts are only in this release.
+
+Every release file is immutable and SHA-256 verified during deployment. A separate, versioned annotation sidecar identifies the exact
 count-ranked, non-OncoKB event features that can be highlighted as likely
 passengers without modifying the published release.
 
@@ -42,7 +48,8 @@ CI-only and GitHub Pages is retired. See
 redirect, and rollback contract.
 
 The release schema, provenance, thresholds, and field definitions are documented
-inside `public/data/releases/k100-2026-08-26/README.md`.
+inside each release's `README.md` under `public/data/releases/`. The release
+catalog is `src/features/atlas/release-catalog.json`.
 
 ## Cite
 

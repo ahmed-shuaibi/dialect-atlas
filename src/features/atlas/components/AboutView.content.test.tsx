@@ -2,16 +2,25 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { AboutView } from "@/features/atlas/components/AboutView";
+import { releaseEntry } from "@/features/atlas/lib/release-catalog";
 import type { ReleaseBundle } from "@/features/atlas/types";
 
 const bundle: ReleaseBundle = {
+  entry: releaseEntry("k100-2026-08-26")!,
   manifest: {
     release_id: "k100-2026-08-26",
     schema_version: "2.0.0",
     immutable: true,
     generated_at: "2026-08-26T00:00:00Z",
     coverage: { cohorts: 71, samples: 81_257 },
-    analysis: { top_k_event_features: 100, fdr_threshold: 0.01 },
+    analysis: {
+      top_k_event_features: 100,
+      fdr_threshold: 0.01,
+      fdr_operator: "<",
+      primary_provider: "cbase",
+      primary_adjustment: "benjamini-hochberg",
+      sensitivity_adjustment: null,
+    },
     bmrs: [
       { id: "cbase", label: "CBaSE", role: "primary" },
       { id: "dig", label: "DIG", role: "robustness" },
@@ -73,6 +82,40 @@ describe("AboutView content contract", () => {
     expect(within(release!).getByText("81,257")).toBeInTheDocument();
     expect(within(release!).getByText("K = 100")).toBeInTheDocument();
     expect(within(release!).getByText("3")).toBeInTheDocument();
+    expect(within(release!).getByText("q < 0.01")).toBeInTheDocument();
+  });
+
+  it("describes the K=500 revision release as MutSigCV2-primary and TCGA-only", () => {
+    const revision: ReleaseBundle = {
+      ...bundle,
+      entry: releaseEntry("k500-2026-09-25")!,
+      manifest: {
+        ...bundle.manifest,
+        release_id: "k500-2026-09-25",
+        schema_version: "3.0.0",
+        coverage: { cohorts: 32, samples: 9_000 },
+        analysis: {
+          top_k_event_features: 500,
+          fdr_threshold: 0.01,
+          fdr_operator: "<=",
+          primary_provider: "mutsig",
+          primary_adjustment: "benjamini-yekutieli",
+          sensitivity_adjustment: "benjamini-hochberg",
+        },
+      },
+      index: { release_id: "k500-2026-09-25", cohorts: [] },
+    };
+    render(<AboutView bundle={revision} cohort={null} onReleaseChange={() => undefined} />);
+    const release = screen
+      .getByRole("heading", { level: 2, name: "k500-2026-09-25" })
+      .closest("section");
+
+    expect(within(release!).getByText("K = 500")).toBeInTheDocument();
+    expect(within(release!).getByText("BY q ≤ 0.01")).toBeInTheDocument();
+    expect(within(release!).getByText(/MSK-IMPACT and MSK-CHORD remain/)).toBeInTheDocument();
+    expect(screen.getByText(/MutSigCV2 is primary/)).toBeInTheDocument();
+    expect(screen.queryByText(/CBaSE is primary/)).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "K=500" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("groups every equation with a centered visual and aligned footer", () => {

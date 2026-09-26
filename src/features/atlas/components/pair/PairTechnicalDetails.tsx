@@ -5,9 +5,11 @@ import { BMR_IDS, type Bmr, type DialectRow } from "@/features/atlas/types";
 
 export function PairTechnicalDetails({
   evidenceByModel,
+  order = BMR_IDS,
   mutsigFallbackFeatures,
 }: {
   evidenceByModel: Record<Bmr, DialectRow | undefined>;
+  order?: readonly Bmr[];
   mutsigFallbackFeatures: string[];
 }) {
   return (
@@ -16,7 +18,7 @@ export function PairTechnicalDetails({
         Technical details
       </summary>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        {BMR_IDS.map((bmr) => {
+        {order.map((bmr) => {
           const row = evidenceByModel[bmr];
           if (!row) {
             return (
@@ -35,7 +37,11 @@ export function PairTechnicalDetails({
                 <div><dt className="inline text-muted">τ₁₀ </dt><dd className="inline">{fmtStat(row.tau10)}</dd></div>
                 <div><dt className="inline text-muted">τ₀₁ </dt><dd className="inline">{fmtStat(row.tau01)}</dd></div>
                 <div><dt className="inline text-muted">τ₁₁ </dt><dd className="inline">{fmtStat(row.tau11)}</dd></div>
-                <div className="col-span-2"><dt className="inline text-muted">Excluded </dt><dd className="inline">{fmtInt(row.excludedSamples)}</dd></div>
+                {row.identifiability ? (
+                  <div className="col-span-2"><dt className="inline text-muted">Fit </dt><dd className="inline">{row.identifiability}</dd></div>
+                ) : (
+                  <div className="col-span-2"><dt className="inline text-muted">Excluded </dt><dd className="inline">{fmtInt(row.excludedSamples)}</dd></div>
+                )}
               </dl>
               {fallback && (
                 <p className="mt-2 text-xs font-bold leading-5 text-alert">

@@ -88,8 +88,10 @@ function readAny(rec: RecordValue, fields: string[]): unknown {
 }
 
 function direction(value: unknown, label: string): TransportDirection {
-  if (value === "ME" || value === "CO" || value === "neutral") return value;
-  throw new DataContractError(`${label} must be ME, CO, or neutral`);
+  if (value === "ME" || value === "CO" || value === "neutral" || value === "unavailable") {
+    return value;
+  }
+  throw new DataContractError(`${label} must be ME, CO, neutral, or unavailable`);
 }
 
 export function decodeManifest(value: unknown): ReleaseManifest {
@@ -112,7 +114,7 @@ export function decodeManifest(value: unknown): ReleaseManifest {
     return [methodId, {
       directions: method.directions.map((item, index) =>
         direction(item, `manifest.methods.${methodId}.directions[${index}]`),
-      ).filter((item): item is "ME" | "CO" => item !== "neutral"),
+      ).filter((item): item is "ME" | "CO" => item === "ME" || item === "CO"),
     }];
   })) as ReleaseManifest["methods"];
   if (!Array.isArray(rec.bmrs)) throw new DataContractError("manifest.bmrs must be an array");
@@ -131,6 +133,7 @@ export function decodeManifest(value: unknown): ReleaseManifest {
         "manifest.analysis.top_k_event_features",
       ),
       fdr_threshold: number(analysis.fdr_threshold, "manifest.analysis.fdr_threshold"),
+      ...decodeAnalysisRule(analysis),
     },
     bmrs: rec.bmrs.map((item, index) => {
       const bmr = object(item, `manifest.bmrs[${index}]`);
@@ -152,6 +155,32 @@ export function decodeManifest(value: unknown): ReleaseManifest {
   };
 }
 
+/** K=100 manifests predate these fields; they used strict BH q with CBaSE primary. */
+function decodeAnalysisRule(analysis: RecordValue): Pick<
+  ReleaseManifest["analysis"],
+  "fdr_operator" | "primary_provider" | "primary_adjustment" | "sensitivity_adjustment"
+> {
+  const operator = analysis.fdr_operator ?? "<";
+  if (operator !== "<" && operator !== "<=") {
+    throw new DataContractError("manifest.analysis.fdr_operator must be < or <=");
+  }
+  const primary = analysis.primary_provider ?? "cbase";
+  if (!BMR_IDS.includes(primary as Bmr)) {
+    throw new DataContractError("manifest.analysis.primary_provider must be a known background");
+  }
+  const sensitivity = analysis.sensitivity_adjustment;
+  return {
+    fdr_operator: operator,
+    primary_provider: primary as Bmr,
+    primary_adjustment: string(
+      analysis.primary_adjustment ?? "benjamini-hochberg",
+      "manifest.analysis.primary_adjustment",
+    ),
+    sensitivity_adjustment:
+      sensitivity == null ? null : string(sensitivity, "manifest.analysis.sensitivity_adjustment"),
+  };
+}
+
 function decodeCohortMeta(value: unknown, index: number): CohortMeta {
   const label = `index.cohorts[${index}]`;
   const rec = object(value, label);
@@ -163,6 +192,7 @@ function decodeCohortMeta(value: unknown, index: number): CohortMeta {
     n_samples: number(rec.n_samples, `${label}.n_samples`),
     median_mutations: number(rec.median_mutations, `${label}.median_mutations`),
     cbio: string(rec.cbio ?? "", `${label}.cbio`),
+    k: number(rec.k ?? 100, `${label}.k`),
     data_file: string(rec.data_file, `${label}.data_file`),
     data_sha256: string(rec.data_sha256, `${label}.data_sha256`),
     data_bytes: number(rec.data_bytes, `${label}.data_bytes`),

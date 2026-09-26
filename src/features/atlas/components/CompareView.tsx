@@ -19,12 +19,17 @@ import {
   type CompareSortDirection,
 } from "@/features/atlas/components/compare-detail";
 import { ResultsToolbar } from "@/features/atlas/components/ResultsToolbar";
-import { DIRECTION_METADATA } from "@/features/atlas/lib/atlas-metadata";
-import { fmtQ } from "@/features/atlas/lib/atlas-transform";
+import {
+  BMR_LABEL,
+  DIRECTION_METADATA,
+  isRevisionRelease,
+} from "@/features/atlas/lib/atlas-metadata";
+import { fmtInt, fmtQ } from "@/features/atlas/lib/atlas-transform";
 import type {
   CohortData,
   Direction,
   InteractionResult,
+  ReleaseCatalogEntry,
   ReleaseManifest,
 } from "@/features/atlas/types";
 import { cn } from "@/lib/utils";
@@ -38,16 +43,18 @@ const DIRECTION_OPTIONS = [
 function EvidenceMark({
   evidence,
   direction,
+  revision,
 }: {
   evidence: CompareEvidence | undefined;
   direction: Direction;
+  revision: boolean;
 }) {
   if (!evidence?.tested || evidence.value == null) {
     return <EvidenceStatus state="missing" label="Not reported" />;
   }
   const oppositeSignificant =
     !evidence.supported &&
-    evidence.value < evidence.method.threshold &&
+    evidence.significant &&
     (evidence.assignedDirection === "ME" || evidence.assignedDirection === "CO") &&
     evidence.assignedDirection !== direction;
   const state: EvidenceState = evidence.fallback || oppositeSignificant
@@ -61,7 +68,8 @@ function EvidenceMark({
       ? `supports ${evidence.assignedDirection}, opposite to ${direction}`
       : `does not support ${direction}`;
   const fallback = evidence.fallback ? "; CBaSE fallback" : "";
-  const label = `${evidence.method.label}: ${significance}; ${evidence.method.measure} ${fmtQ(evidence.value)}${fallback}`;
+  const measure = revision && evidence.method.id in BMR_LABEL ? "BY q" : evidence.method.measure;
+  const label = `${evidence.method.label}: ${significance}; ${measure} ${fmtQ(evidence.value)}${fallback}`;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -89,6 +97,7 @@ function PassengerMarker({ features }: { features: string[] }) {
 function ComparisonSection({
   data,
   manifestMethods,
+  release,
   direction,
   qThreshold,
   query,
@@ -98,6 +107,7 @@ function ComparisonSection({
 }: {
   data: CohortData;
   manifestMethods: ReleaseManifest["methods"];
+  release?: ReleaseCatalogEntry;
   direction: Direction;
   qThreshold: number;
   query: string;
@@ -106,11 +116,13 @@ function ComparisonSection({
   onSelect: (result: InteractionResult) => void;
 }) {
   const methods = useMemo(
-    () => comparisonMethods(direction, manifestMethods, qThreshold),
-    [direction, manifestMethods, qThreshold],
+    () => comparisonMethods(direction, manifestMethods, qThreshold, release),
+    [direction, manifestMethods, qThreshold, release],
   );
+  const revision = release != null && isRevisionRelease(release);
   const [visible, setVisible] = useState(DISPLAY_LIMIT);
-  const [sortMethod, setSortMethod] = useState<CompareMethodId>("cbase");
+  // Sort by the release's primary background first (MutSigCV2 at K=500, CBaSE at K=100).
+  const [sortMethod, setSortMethod] = useState<CompareMethodId>(methods[0]?.id ?? "cbase");
   const [sortDirection, setSortDirection] = useState<CompareSortDirection>("ascending");
 
   useEffect(() => {
@@ -133,6 +145,11 @@ function ComparisonSection({
     return sortComparisonRows(matching, sortMethod, sortDirection);
   }, [normalizedQuery, rows, sortDirection, sortMethod]);
   const shown = filtered.slice(0, visible);
+  // K=500 materializes a capped head per method; name the exact total when it differs.
+  const exactTotal = useMemo(
+    () => (normalizedQuery || !data.countSupported ? undefined : data.countSupported(direction, qThreshold)),
+    [data, direction, normalizedQuery, qThreshold],
+  );
   const activeMethod = methods.find((method) => method.id === sortMethod) ?? methods[0];
 
   const chooseSort = (method: CompareMethodId) => {
@@ -148,7 +165,16 @@ function ComparisonSection({
     <section aria-label={DIRECTION_METADATA[direction].label}>
       <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold text-muted">
-          <span className="font-mono text-ink">{filtered.length}</span> pairs supported by at least one method
+          {exactTotal != null && exactTotal > filtered.length ? (
+            <>
+              Strongest <span className="font-mono text-ink">{fmtInt(filtered.length)}</span> of{" "}
+              <span className="font-mono text-ink">{fmtInt(exactTotal)}</span> pairs supported by at least one method
+            </>
+          ) : (
+            <>
+              <span className="font-mono text-ink">{fmtInt(filtered.length)}</span> pairs supported by at least one method
+            </>
+          )}
         </p>
         <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto md:hidden">
           <label className="min-w-0 flex-1 sm:flex-none">
@@ -257,7 +283,7 @@ function ComparisonSection({
                     </th>
                     {methods.map((method) => (
                       <td key={method.id} className="px-1 py-3 text-center">
-                        <EvidenceMark evidence={row.evidence[method.id]} direction={direction} />
+                        <EvidenceMark evidence={row.evidence[method.id]} direction={direction} revision={revision} />
                       </td>
                     ))}
                   </tr>
@@ -292,7 +318,7 @@ function ComparisonSection({
                   <PassengerMarker features={passengerFeatures} />
                   <p className="mt-1 text-xs font-semibold text-muted">{activeMethod?.label}</p>
                 </div>
-                <EvidenceMark evidence={row.evidence[sortMethod]} direction={direction} />
+                <EvidenceMark evidence={row.evidence[sortMethod]} direction={direction} revision={revision} />
               </article>
               );
             })}
@@ -314,6 +340,7 @@ function ComparisonSection({
 export type CompareViewProps = {
   data: CohortData;
   manifestMethods: ReleaseManifest["methods"];
+  release?: ReleaseCatalogEntry;
   qThreshold: number;
   direction: Direction;
   onDirectionChange: (direction: Direction) => void;
@@ -326,6 +353,7 @@ export type CompareViewProps = {
 export function CompareView({
   data,
   manifestMethods,
+  release,
   qThreshold,
   direction,
   onDirectionChange,
@@ -369,6 +397,7 @@ export function CompareView({
           <ComparisonSection
             data={data}
             manifestMethods={manifestMethods}
+            release={release}
             direction={direction}
             qThreshold={qThreshold}
             query={query}

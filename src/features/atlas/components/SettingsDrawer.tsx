@@ -7,13 +7,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { ATLAS_MODES } from "@/features/atlas/lib/atlas-metadata";
+import {
+  ATLAS_MODES,
+  atlasModesFor,
+  isRevisionRelease,
+} from "@/features/atlas/lib/atlas-metadata";
 import {
   BMR_COUNT_THRESHOLDS,
   Q_THRESHOLDS,
   type AtlasMode,
   type BmrCount,
   type QThreshold,
+  type ReleaseCatalogEntry,
 } from "@/features/atlas/types";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +66,8 @@ export type SettingsDrawerProps = {
   showBackground?: boolean;
   showConsensusThresholds?: boolean;
   mode: AtlasMode;
+  /** Absent in isolated renders: fall back to the K=100 copy. */
+  release?: Pick<ReleaseCatalogEntry, "schema_version">;
   qThreshold: QThreshold;
   minIdentifiedBmrs: BmrCount;
   minSignificantBmrs: BmrCount;
@@ -78,6 +85,7 @@ export function SettingsDrawer({
   showBackground = true,
   showConsensusThresholds = false,
   mode,
+  release,
   qThreshold,
   minIdentifiedBmrs,
   minSignificantBmrs,
@@ -89,6 +97,8 @@ export function SettingsDrawer({
   onMinSignificantBmrsChange,
   onHighlightLikelyPassengersChange,
 }: SettingsDrawerProps) {
+  const revision = release != null && isRevisionRelease(release);
+  const modes = release ? atlasModesFor(release) : ATLAS_MODES;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
@@ -103,7 +113,7 @@ export function SettingsDrawer({
         {showBackground && (
           <fieldset className="mt-7 space-y-2">
             <legend className="mb-3 text-sm font-semibold">Background</legend>
-            {ATLAS_MODES.map((option) => (
+            {modes.map((option) => (
               <div
                 key={option.value}
                 className={cn(
@@ -144,7 +154,7 @@ export function SettingsDrawer({
         )}
 
         <fieldset className={showBackground ? "mt-7" : "mt-6"}>
-          <legend className="text-sm font-semibold">q cutoff</legend>
+          <legend className="text-sm font-semibold">{revision ? "BY q cutoff (≤)" : "q cutoff"}</legend>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {Q_THRESHOLDS.map((threshold) => (
               <button
@@ -165,7 +175,9 @@ export function SettingsDrawer({
 
         {showConsensusThresholds && (
           <fieldset className="mt-7">
-            <legend className="text-sm font-semibold">Consensus thresholds</legend>
+            <legend className="text-sm font-semibold">
+              {revision ? "Overlap thresholds" : "Consensus thresholds"}
+            </legend>
             <div className="mt-3 space-y-2">
               <BmrMinimumControl
                 label="BMRs identifying"

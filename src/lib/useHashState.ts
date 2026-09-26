@@ -15,10 +15,17 @@ import {
   DEFAULT_Q_THRESHOLD,
   Q_THRESHOLDS,
 } from "@/features/atlas/types";
+import {
+  DEFAULT_RELEASE_ID,
+  defaultModeFor,
+  defaultReleaseEntry,
+  resolveRelease,
+} from "@/features/atlas/lib/release-catalog";
 
 export const URL_DEFAULTS: AtlasUrlState = {
+  release: DEFAULT_RELEASE_ID,
   view: "explore",
-  mode: "consensus",
+  mode: defaultModeFor(defaultReleaseEntry()),
   settings: false,
   exploreDisplay: "list",
   qThreshold: DEFAULT_Q_THRESHOLD,
@@ -53,10 +60,12 @@ export function parseAtlasHash(hash: string): AtlasUrlState {
   const view = params.get("view");
   const mode = params.get("mode");
   const exploreDisplay = params.get("display");
+  const release = resolveRelease(params.get("release"), cohort);
   return {
+    release: release.id,
     view: isView(view) ? view : URL_DEFAULTS.view,
     cohort,
-    mode: isMode(mode) ? mode : URL_DEFAULTS.mode,
+    mode: isMode(mode) ? mode : defaultModeFor(release),
     pair,
     settings: params.get("settings") === "1",
     exploreDisplay: isExploreDisplay(exploreDisplay)
@@ -81,6 +90,7 @@ export function parseAtlasHash(hash: string): AtlasUrlState {
 
 export function serializeAtlasHash(state: AtlasUrlState): string {
   const params = new URLSearchParams();
+  params.set("release", state.release);
   params.set("view", state.view);
   if (state.cohort) params.set("cohort", state.cohort);
   params.set("mode", state.mode);

@@ -15,18 +15,19 @@ function median(values: number[]): number {
 export function resultEffect(result: InteractionResult, mode: AtlasMode): number {
   if (mode !== "consensus") {
     const row = result.matches.find(({ bmr }) => bmr === mode)?.row ?? result.representative;
-    return result.direction === "ME" ? row.rho : lrtEvidence(row);
+    return result.direction === "ME" ? row.rho ?? Number.NaN : lrtEvidence(row);
   }
   return median(
-    independentConsensusMatches(result).map(({ row }) =>
-      result.direction === "ME" ? row.rho : lrtEvidence(row),
-    ),
+    independentConsensusMatches(result)
+      .map(({ row }) => (result.direction === "ME" ? row.rho ?? Number.NaN : lrtEvidence(row)))
+      .filter((value) => !Number.isNaN(value)),
   );
 }
 
 export function resultEffectText(result: InteractionResult, mode: AtlasMode): string {
   const value = resultEffect(result, mode);
   const prefix = mode === "consensus" ? "median " : "";
+  if (Number.isNaN(value)) return result.direction === "ME" ? "ρ not identifiable" : "LRT not reported";
   return result.direction === "ME"
     ? `${prefix}ρ ${value < 0 ? "−" : ""}${fmtStat(Math.abs(value))}`
     : `${prefix}LRT ${fmtStat(value, 2)}`;

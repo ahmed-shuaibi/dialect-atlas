@@ -4,6 +4,7 @@ import type {
   CohortMeta,
   Direction,
   ManifestMethodId,
+  ReleaseCatalogEntry,
 } from "@/features/atlas/types";
 
 export type MethodMetadata = {
@@ -168,4 +169,51 @@ export function studyLabel(study: string): string {
 
 export function cohortTag(cohort: CohortMeta): string {
   return cohort.cohort;
+}
+
+/** Background roles differ by release: K=500 is MutSig-primary, K=100 CBaSE-primary. */
+const K500_BMR_SUMMARY: Record<Bmr, string> = {
+  mutsig: "Primary background.",
+  cbase: "Continuity comparison.",
+  dig: "Gene-level sensitivity.",
+};
+
+export function isRevisionRelease(entry: Pick<ReleaseCatalogEntry, "schema_version">): boolean {
+  return entry.schema_version === "3.0.0";
+}
+
+export function bmrMethodsFor(entry: Pick<ReleaseCatalogEntry, "schema_version">): MethodMetadata[] {
+  if (!isRevisionRelease(entry)) return Object.values(BMR_METHODS);
+  return (["mutsig", "cbase", "dig"] as const).map((bmr) => ({
+    ...BMR_METHODS[bmr],
+    summary: K500_BMR_SUMMARY[bmr],
+  }));
+}
+
+export function atlasModesFor(
+  entry: Pick<ReleaseCatalogEntry, "schema_version">,
+): typeof ATLAS_MODES {
+  if (!isRevisionRelease(entry)) return ATLAS_MODES;
+  return [
+    ...bmrMethodsFor(entry).map((method) => ({
+      value: method.id as Bmr,
+      label: method.label,
+      detail: method.summary,
+      href: method.href,
+    })),
+    {
+      value: "consensus",
+      label: "Overlap",
+      detail: "Descriptive agreement across backgrounds.",
+    },
+  ];
+}
+
+export function methodsFor(entry: Pick<ReleaseCatalogEntry, "schema_version">): MethodMetadata[] {
+  return [METHODS[0], ...bmrMethodsFor(entry), ...Object.values(COMPARISON_METHODS)];
+}
+
+/** How the release names its primary q and comparison, e.g. "BY q ≤" or "q <". */
+export function qCutoffLabel(entry: Pick<ReleaseCatalogEntry, "schema_version">): string {
+  return isRevisionRelease(entry) ? "BY q ≤" : "q <";
 }

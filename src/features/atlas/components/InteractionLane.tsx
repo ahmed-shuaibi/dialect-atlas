@@ -5,7 +5,8 @@ import { resultEffectText } from "@/features/atlas/components/explore-display";
 import { DIRECTION_METADATA } from "@/features/atlas/lib/atlas-metadata";
 import {
   backgroundSupport,
-  consensusQLabel,
+  resultQLabel,
+  fmtInt,
   fmtQ,
   resultIsSignificant,
   resultQ,
@@ -51,9 +52,11 @@ export function InteractionLane({
   likelyPassengers,
   highlightLikelyPassengers,
   onSelect,
+  total,
 }: {
   direction: Direction;
   results: InteractionResult[];
+  total?: number;
   mode: AtlasMode;
   qThreshold: number;
   minIdentifiedBmrs: BmrCount;
@@ -79,7 +82,9 @@ export function InteractionLane({
           <p className="mt-1 text-sm leading-5 text-muted">{copy.detail}</p>
         </div>
         <p className="shrink-0 font-mono text-sm text-muted">
-          {results.length} {results.length === 1 ? "pair" : "pairs"}
+          {total != null && total > results.length
+            ? `${fmtInt(results.length)} of ${fmtInt(total)} pairs`
+            : `${fmtInt(results.length)} ${results.length === 1 ? "pair" : "pairs"}`}
         </p>
       </header>
 
@@ -97,9 +102,7 @@ export function InteractionLane({
               minSignificantBmrs,
             });
             const q = resultQ(result, mode, minSignificantBmrs);
-            const qLabel = mode === "consensus"
-              ? consensusQLabel(minSignificantBmrs)
-              : "q";
+            const qLabel = resultQLabel(result, mode, minSignificantBmrs);
             const passengerA = highlightLikelyPassengers && likelyPassengers.has(result.ga);
             const passengerB = highlightLikelyPassengers && likelyPassengers.has(result.gb);
             return (

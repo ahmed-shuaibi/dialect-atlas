@@ -17,6 +17,11 @@ import {
   findResultForMode,
   parsePairId,
 } from "@/features/atlas/lib/atlas-transform";
+import {
+  defaultModeFor,
+  resolveRelease,
+  studyOfCohort,
+} from "@/features/atlas/lib/release-catalog";
 import type { InteractionResult } from "@/features/atlas/types";
 import { useHashState } from "@/lib/useHashState";
 
@@ -59,18 +64,21 @@ function ErrorState({
 
 export function App() {
   const [url, setUrl] = useHashState();
-  const release = useRelease();
-  const cohortMeta = release.data?.index.cohorts.find((cohort) => cohort.id === url.cohort) ?? null;
+  const releaseEntry = resolveRelease(url.release, url.cohort);
+  const release = useRelease(releaseEntry.id);
+  // Never pair a cohort with a bundle from a release the URL has already left.
+  const bundle = release.data?.entry.id === releaseEntry.id ? release.data : null;
+  const cohortMeta = bundle?.index.cohorts.find((cohort) => cohort.id === url.cohort) ?? null;
   const isResultsView = url.view === "explore" || url.view === "compare";
   const shouldLoadCohort = isResultsView && cohortMeta != null;
-  const cohort = useCohort(shouldLoadCohort ? cohortMeta : null);
+  const cohort = useCohort(shouldLoadCohort ? cohortMeta : null, releaseEntry.id);
   const likelyPassengers = useMemo(
     () => new Set(
-      cohortMeta && release.data
-        ? release.data.likelyPassengers.cohorts[cohortMeta.id] ?? []
+      cohortMeta && bundle
+        ? bundle.likelyPassengers.cohorts[cohortMeta.id] ?? []
         : [],
     ),
-    [cohortMeta, release.data],
+    [cohortMeta, bundle],
   );
   const selection = useMemo(() => parsePairId(url.pair), [url.pair]);
   const selectedResult = useMemo(
@@ -111,6 +119,18 @@ export function App() {
   const chooseCohort = (id: string) => {
     setUrl({ cohort: id, pair: undefined, settings: false });
   };
+  const chooseRelease = (id: string) => {
+    if (id === releaseEntry.id) return;
+    const next = resolveRelease(id);
+    const study = studyOfCohort(url.cohort);
+    setUrl({
+      release: next.id,
+      mode: defaultModeFor(next),
+      cohort: study && next.studies.includes(study) ? url.cohort : undefined,
+      pair: undefined,
+      settings: false,
+    });
+  };
   const selectPair = (result: InteractionResult) => setUrl({ pair: result.id });
   const customize = (
     <SettingsDrawer
@@ -118,6 +138,7 @@ export function App() {
       showBackground={url.view === "explore"}
       showConsensusThresholds={url.view === "explore" && url.mode === "consensus"}
       mode={url.mode}
+      release={releaseEntry}
       qThreshold={url.qThreshold}
       minIdentifiedBmrs={url.minIdentifiedBmrs}
       minSignificantBmrs={url.minSignificantBmrs}
@@ -147,18 +168,18 @@ export function App() {
         </main>
       )}
 
-      {url.view !== "contact" && release.status === "loading" && <FullPageLoading />}
+      {url.view !== "contact" && !bundle && release.status !== "error" && <FullPageLoading />}
       {url.view !== "contact" && release.status === "error" && (
         <main id="main" tabIndex={-1} className="site-shell">
           <ErrorState title="Release data unavailable" error={release.error} onRetry={release.retry} />
         </main>
       )}
 
-      {url.view !== "contact" && release.data && (
+      {url.view !== "contact" && bundle && (
         <main id="main" tabIndex={-1} className="outline-none">
           {url.view === "about" ? (
             <div className="site-shell">
-              <AboutView bundle={release.data} cohort={cohortMeta} />
+              <AboutView bundle={bundle} cohort={cohortMeta} onReleaseChange={chooseRelease} />
             </div>
           ) : !url.cohort || !cohortMeta ? (
             <>
@@ -167,15 +188,22 @@ export function App() {
                   That cohort is not part of this immutable release. Choose another.
                 </p>
               )}
-              <InitialCohortChooser cohorts={release.data.index.cohorts} onSelect={chooseCohort} />
+              <InitialCohortChooser
+                cohorts={bundle.index.cohorts}
+                onSelect={chooseCohort}
+                release={releaseEntry}
+                onReleaseChange={chooseRelease}
+              />
             </>
           ) : (
             <div className="site-shell pb-16">
               <CohortHeader
                 view={url.view}
                 cohort={cohortMeta}
-                cohorts={release.data.index.cohorts}
+                cohorts={bundle.index.cohorts}
                 onCohortChange={chooseCohort}
+                release={releaseEntry}
+                onReleaseChange={chooseRelease}
               />
 
               {cohort.status === "loading" && <ResultsSkeleton />}
@@ -185,6 +213,7 @@ export function App() {
               {cohort.data && url.view === "explore" && (
                 <ExploreView
                   data={cohort.data}
+                  release={releaseEntry}
                   mode={url.mode}
                   display={url.exploreDisplay}
                   qThreshold={url.qThreshold}
@@ -204,7 +233,8 @@ export function App() {
               {cohort.data && url.view === "compare" && (
                 <CompareView
                   data={cohort.data}
-                  manifestMethods={release.data.manifest.methods}
+                  manifestMethods={bundle.manifest.methods}
+                  release={releaseEntry}
                   qThreshold={url.qThreshold}
                   direction={url.compareDirection}
                   onDirectionChange={(compareDirection) => setUrl({ compareDirection })}
@@ -218,7 +248,8 @@ export function App() {
               {cohort.data && (
                 <PairDialog
                   result={selectedResult}
-                  mode={url.view === "compare" ? "consensus" : url.mode}
+                  release={releaseEntry}
+                  mode={url.view === "compare" ? defaultModeFor(releaseEntry) : url.mode}
                   qThreshold={url.qThreshold}
                   minIdentifiedBmrs={url.minIdentifiedBmrs}
                   minSignificantBmrs={url.minSignificantBmrs}
@@ -233,7 +264,7 @@ export function App() {
         </main>
       )}
 
-      <Footer releaseId={release.data?.manifest.release_id} />
+      <Footer releaseId={bundle?.manifest.release_id} />
     </div>
   );
 }

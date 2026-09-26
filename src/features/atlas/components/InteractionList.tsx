@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { InteractionLane } from "@/features/atlas/components/InteractionLane";
-import type { AtlasMode, BmrCount, InteractionResult } from "@/features/atlas/types";
+import type { AtlasMode, BmrCount, Direction, InteractionResult } from "@/features/atlas/types";
 
 export function InteractionList({
   results,
@@ -11,8 +11,11 @@ export function InteractionList({
   likelyPassengers,
   highlightLikelyPassengers,
   onSelect,
+  totals,
 }: {
   results: InteractionResult[];
+  /** Exact per-direction totals when the listed rows are a capped head (K=500). */
+  totals?: Record<Direction, number>;
   mode: AtlasMode;
   qThreshold: number;
   minIdentifiedBmrs: BmrCount;
@@ -41,6 +44,7 @@ export function InteractionList({
         <InteractionLane
           direction="ME"
           results={me}
+          total={totals?.ME}
           mode={mode}
           qThreshold={qThreshold}
           minIdentifiedBmrs={minIdentifiedBmrs}
@@ -52,6 +56,7 @@ export function InteractionList({
         <InteractionLane
           direction="CO"
           results={co}
+          total={totals?.CO}
           mode={mode}
           qThreshold={qThreshold}
           minIdentifiedBmrs={minIdentifiedBmrs}

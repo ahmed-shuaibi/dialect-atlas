@@ -35,7 +35,7 @@ import {
   type NetworkLayoutNode,
 } from "@/features/atlas/components/network-layout";
 import {
-  consensusQLabel,
+  resultQLabel,
   fmtQ,
   resultIsSignificant,
 } from "@/features/atlas/lib/atlas-transform";
@@ -129,7 +129,6 @@ export function InteractionNetwork({
     [results],
   );
   const directionCounts = useMemo(() => countDirections(results), [results]);
-  const qLabel = mode === "consensus" ? consensusQLabel(minSignificantBmrs) : "q";
   const initialNodes = useMemo<GeneNode[]>(
     () =>
       layout.nodes.map((node) => {
@@ -183,7 +182,12 @@ export function InteractionNetwork({
           deletable: false,
           interactionWidth: 22,
           ariaLabel: result
-            ? interactionAriaLabel(result, significant, qLabel, edge.q)
+            ? interactionAriaLabel(
+              result,
+              significant,
+              resultQLabel(result, mode, minSignificantBmrs),
+              edge.q,
+            )
             : edge.id,
           style: {
             stroke: edge.direction === "ME" ? "var(--me)" : "var(--co)",
@@ -193,7 +197,7 @@ export function InteractionNetwork({
           },
         };
       }),
-    [layout.edges, minIdentifiedBmrs, minSignificantBmrs, mode, qLabel, qThreshold, resultById],
+    [layout.edges, minIdentifiedBmrs, minSignificantBmrs, mode, qThreshold, resultById],
   );
 
   useEffect(() => {

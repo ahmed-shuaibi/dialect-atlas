@@ -1,5 +1,10 @@
 /**
- * Fail-closed validation for the complete immutable DIALECT Atlas K=100 release.
+ * Fail-closed validation for every immutable DIALECT Atlas release.
+ *
+ * With no argument, validates each release listed in src/features/atlas/release-catalog.json
+ * and requires public/data/releases to contain exactly those releases. With a path argument,
+ * validates that one release directory. The K=100 contract lives in this file; the K=500
+ * (schema 3.0.0) contract lives in validate-release-k500.mjs.
  *
  * This runs with Node alone so the exact committed data contract can be gated in the
  * Atlas repository and on static-hosting builds without the Python analysis environment.
@@ -8,10 +13,11 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath, URL } from "node:url";
+import { K500_SCHEMA_VERSION, validateK500Release } from "./validate-release-k500.mjs";
 
 const RELEASE_ID = "k100-2026-08-26";
 const LIKELY_PASSENGER_FILE = "annotations/likely-passengers-v1.json";
@@ -1706,10 +1712,42 @@ async function validateRelease(root) {
 }
 
 const scriptDirectory = resolve(fileURLToPath(new URL(".", import.meta.url)));
-const defaultRoot = resolve(scriptDirectory, "../public/data/releases", RELEASE_ID);
-const rootArgument = process.argv[2] ? resolve(process.argv[2]) : defaultRoot;
+const releasesRoot = resolve(scriptDirectory, "../public/data/releases");
+const catalogPath = resolve(scriptDirectory, "../src/features/atlas/release-catalog.json");
 
-validateRelease(rootArgument).catch((error) => {
+async function validateOne(root, expectedSchema = null) {
+  const releaseId = basename(root);
+  const manifest = JSON.parse(await readFile(resolve(root, "manifest.json"), "utf8"));
+  if (expectedSchema != null) {
+    assert(manifest.schema_version === expectedSchema, `${releaseId}: catalog schema mismatch`);
+  }
+  if (releaseId === RELEASE_ID) {
+    await validateRelease(root);
+  } else if (manifest.schema_version === K500_SCHEMA_VERSION && /^k500-\d{4}-\d{2}-\d{2}$/.test(releaseId)) {
+    await validateK500Release(root, releaseId);
+  } else {
+    throw new Error(`unrecognized release ${releaseId} (schema ${manifest.schema_version})`);
+  }
+}
+
+async function validateCatalog() {
+  const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
+  const ids = catalog.releases.map((release) => release.id);
+  assert(new Set(ids).size === ids.length, "release catalog has duplicate IDs");
+  assert(ids.includes(catalog.default), "release catalog default is not a listed release");
+  assert(ids.includes(RELEASE_ID), `release catalog must keep ${RELEASE_ID}`);
+  const onDisk = (await readdir(releasesRoot)).filter((name) => !name.startsWith(".")).sort(codePointCompare);
+  assert(
+    sameArray(onDisk, [...ids].sort(codePointCompare)),
+    `public/data/releases (${onDisk.join(", ")}) must match the catalog (${ids.join(", ")})`,
+  );
+  for (const release of catalog.releases) {
+    await validateOne(resolve(releasesRoot, release.id), release.schema_version);
+  }
+  process.stdout.write(`${ids.length} releases valid; default ${catalog.default}\n`);
+}
+
+(process.argv[2] ? validateOne(resolve(process.argv[2])) : validateCatalog()).catch((error) => {
   process.stderr.write(`release validation failed: ${error.message}\n`);
   process.exitCode = 1;
 });

@@ -7,7 +7,14 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { ATLAS_LINKS, BMR_METHODS, METHODS } from "@/features/atlas/lib/atlas-metadata";
+import { ReleaseSwitch } from "@/features/atlas/components/ReleaseSwitch";
+import {
+  ATLAS_LINKS,
+  METHODS,
+  bmrMethodsFor,
+  isRevisionRelease,
+  qCutoffLabel,
+} from "@/features/atlas/lib/atlas-metadata";
 import {
   cohortUrl,
   indexUrl,
@@ -172,13 +179,24 @@ function MethodCarousel() {
   );
 }
 
-export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: CohortMeta | null }) {
+export function AboutView({
+  bundle,
+  cohort,
+  onReleaseChange,
+}: {
+  bundle: ReleaseBundle;
+  cohort: CohortMeta | null;
+  onReleaseChange?: (id: string) => void;
+}) {
   const { coverage, analysis } = bundle.manifest;
+  const release = bundle.entry;
+  const revision = isRevisionRelease(release);
   const releaseFacts = [
     ["Cohorts", numberFact(coverage.cohorts)],
     ["Tumors", numberFact(coverage.samples)],
     ["Gene-effect cap", `K = ${numberFact(analysis.top_k_event_features)}`],
     ["Backgrounds", "3"],
+    ["Call rule", `${qCutoffLabel(release)} ${analysis.fdr_threshold}`],
   ];
 
   return (
@@ -195,7 +213,11 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
       <section aria-labelledby="formulation-heading" className="mt-12">
         <h2 id="formulation-heading" className="sr-only">DIALECT formulation</h2>
         <div className="grid gap-px overflow-hidden rounded-[28px] border border-line bg-line shadow-soft lg:grid-cols-3">
-          {FORMULATION.map((step, index) => (
+          {FORMULATION.map((step) =>
+            revision && step.label === "Identify dependencies"
+              ? { ...step, caption: "One LRT per pair; ρ gives the direction. Ranked by BY q." }
+              : step,
+          ).map((step, index) => (
             <article
               key={step.label}
               className="formulation-step grid min-h-80 grid-rows-[auto_1fr_auto] gap-4 bg-paper p-6 sm:p-7"
@@ -221,15 +243,28 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
       <section aria-labelledby="backgrounds-heading" className="mt-12">
         <div className="max-w-3xl">
           <h2 id="backgrounds-heading" className="text-3xl font-semibold">Background sensitivity</h2>
-          <p className="mt-3 text-lg leading-8 text-muted">
-            CBaSE is primary. DIG and MutSigCV2 test sensitivity to the background model.
-          </p>
-          <p className="mt-1 text-lg leading-8 text-muted">
-            Consensus defaults to exact pairs with the same direction under all three.
-          </p>
+          {revision ? (
+            <>
+              <p className="mt-3 text-lg leading-8 text-muted">
+                MutSigCV2 is primary. CBaSE gives continuity with the original release; DIG tests gene-level sensitivity.
+              </p>
+              <p className="mt-1 text-lg leading-8 text-muted">
+                Each background is one complete within-cohort test family. Overlap is descriptive, not a vote.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 text-lg leading-8 text-muted">
+                CBaSE is primary. DIG and MutSigCV2 test sensitivity to the background model.
+              </p>
+              <p className="mt-1 text-lg leading-8 text-muted">
+                Consensus defaults to exact pairs with the same direction under all three.
+              </p>
+            </>
+          )}
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-3">
-          {Object.values(BMR_METHODS).map((method) => (
+          {bmrMethodsFor(release).map((method) => (
             <a
               key={method.id}
               href={method.href}
@@ -262,6 +297,11 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
             <h2 id="release-heading" className="mt-2 text-2xl font-semibold">
               {bundle.manifest.release_id}
             </h2>
+            {revision && (
+              <p className="mt-1 text-sm text-muted">
+                MSK-IMPACT and MSK-CHORD remain in the K=100 release.
+              </p>
+            )}
           </div>
           <a
             href={ATLAS_LINKS.source}
@@ -273,7 +313,11 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
           </a>
         </div>
 
-        <dl className="mt-6 grid gap-px overflow-hidden rounded-[20px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+        {onReleaseChange && (
+          <ReleaseSwitch release={release} onChange={onReleaseChange} className="mt-5" />
+        )}
+
+        <dl className="mt-6 grid gap-px overflow-hidden rounded-[20px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-5">
           {releaseFacts.map(([label, value]) => (
             <div key={label} className="bg-canvas/65 px-4 py-3">
               <dt className="text-xs font-semibold text-muted">{label}</dt>
@@ -283,10 +327,10 @@ export function AboutView({ bundle, cohort }: { bundle: ReleaseBundle; cohort: C
         </dl>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <DownloadLink href={manifestUrl()}>Manifest</DownloadLink>
+          <DownloadLink href={manifestUrl(release.id)}>Manifest</DownloadLink>
           <DownloadLink href={indexUrl(bundle)}>Cohort index</DownloadLink>
           <DownloadLink href={readmeUrl(bundle)}>Data dictionary</DownloadLink>
-          {cohort && <DownloadLink href={cohortUrl(cohort)}>Current cohort</DownloadLink>}
+          {cohort && <DownloadLink href={cohortUrl(cohort, release.id)}>Current cohort</DownloadLink>}
         </div>
       </section>
     </section>

@@ -2,11 +2,13 @@ import {
   baseGene,
   codePointCompare,
   findResult,
+  isSignificant,
   pairKey,
 } from "@/features/atlas/lib/atlas-transform";
 import {
   BMR_METHODS,
   COMPARISON_METHODS,
+  bmrMethodsFor,
   type BaselineMethodId,
 } from "@/features/atlas/lib/atlas-metadata";
 import {
@@ -18,6 +20,7 @@ import {
   type DialectRow,
   type Direction,
   type InteractionResult,
+  type ReleaseCatalogEntry,
   type ReleaseManifest,
 } from "@/features/atlas/types";
 
@@ -36,6 +39,8 @@ export type CompareEvidence = {
   method: CompareMethod;
   tested: boolean;
   value: number | null;
+  /** The method's own call at the active cutoff, irrespective of direction. */
+  significant: boolean;
   supported: boolean;
   assignedDirection?: DialectRow["direction"];
   fallback?: boolean;
@@ -58,14 +63,16 @@ export function comparisonMethods(
   direction: Direction,
   manifestMethods: ReleaseManifest["methods"],
   qThreshold = DEFAULT_Q_THRESHOLD,
+  release?: Pick<ReleaseCatalogEntry, "schema_version">,
 ): CompareMethod[] {
+  const bmrs = release ? bmrMethodsFor(release) : BMR_IDS.map((id) => BMR_METHODS[id]);
   const methods: CompareMethod[] = manifestMethods.dialect.directions.includes(direction)
-    ? BMR_IDS.map((id) => ({
-        id,
-        label: BMR_METHODS[id].label,
+    ? bmrs.map((method) => ({
+        id: method.id as Bmr,
+        label: method.label,
         measure: "q" as const,
         threshold: qThreshold,
-        href: BMR_METHODS[id].href,
+        href: method.href,
       }))
     : [];
   for (const metadata of Object.values(COMPARISON_METHODS)) {
@@ -131,7 +138,7 @@ export function buildComparisonRows(
     const methodId = method.id;
     if (isBmrMethod(methodId)) {
       modelRows[methodId].forEach((row, key) => {
-        if (row.direction === direction && row.q != null && row.q < method.threshold) {
+        if (row.direction === direction && isSignificant(row, method.threshold)) {
           candidates.add(key);
         }
       });
@@ -156,14 +163,16 @@ export function buildComparisonRows(
       methods.forEach((method) => {
         const methodId = method.id;
         if (isBmrMethod(methodId)) {
-          const row = modelRows[methodId].get(key);
+          // K=500 reaches pairs outside the materialized subset through the full table.
+          const row = modelRows[methodId].get(key) ?? data.lookupPair?.(methodId, ga, gb) ?? undefined;
           const value = row?.q ?? null;
+          const significant = row != null && isSignificant(row, method.threshold);
           evidence[methodId] = {
             method,
             tested: row != null,
             value,
-            supported:
-              row?.direction === direction && value != null && value < method.threshold,
+            significant,
+            supported: row?.direction === direction && significant,
             assignedDirection: row?.direction,
             fallback:
               methodId === "mutsig" &&
@@ -172,7 +181,7 @@ export function buildComparisonRows(
           };
           return;
         }
-        const baseline = baselines.get(key);
+        const baseline = baselines.get(key) ?? data.lookupBaseline?.(ga, gb) ?? undefined;
         const value = baseline
           ? baselineValue(
               baseline,
@@ -180,11 +189,13 @@ export function buildComparisonRows(
               direction,
             )
           : null;
+        const significant = value != null && value < method.threshold;
         evidence[methodId] = {
           method,
           tested: value != null,
           value,
-          supported: value != null && value < method.threshold,
+          significant,
+          supported: significant,
         };
       });
       return {

@@ -7,7 +7,10 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SCRIPT_DIR, "..");
 const DIST = path.join(ROOT, "dist");
-const RELEASE = "k100-2026-08-26";
+const CATALOG = JSON.parse(
+  await readFile(path.join(ROOT, "src/features/atlas/release-catalog.json"), "utf8"),
+);
+const RELEASES = CATALOG.releases.map((release) => release.id);
 const ANNOTATION_FILE = "data/annotations/likely-passengers-v1.json";
 const ANNOTATION_SHA256 =
   "c8efd1f97359669ff21146e9ebcb61eaa6c109a1e22688beda291666c24e6cc2";
@@ -66,9 +69,15 @@ await Promise.all([
   assertFile("_headers"),
   assertFile("robots.txt"),
   assertFile("sitemap.xml"),
-  assertFile(`data/releases/${RELEASE}/manifest.json`),
-  assertFile(`data/releases/${RELEASE}/index.json`),
-  assertFile(`data/releases/${RELEASE}/cohorts/TCGA__CHOL.json`),
+  ...RELEASES.flatMap((release) => [
+    assertFile(`data/releases/${release}/manifest.json`),
+    assertFile(`data/releases/${release}/index.json`),
+    assertFile(`data/releases/${release}/README.md`),
+  ]),
+  assertFile("data/releases/k100-2026-08-26/cohorts/TCGA__CHOL.json"),
+  ...CATALOG.releases
+    .filter((release) => release.schema_version === "3.0.0")
+    .map((release) => assertFile(`data/releases/${release.id}/cohorts/TCGA__CHOL/cohort.json`)),
   assertFile(ANNOTATION_FILE),
 ]);
 
@@ -85,10 +94,12 @@ assert(robots.includes(`${DEFAULT_SITE_URL}/sitemap.xml`), "robots.txt sitemap U
 assert(sitemap.includes(`<loc>${DEFAULT_SITE_URL}/</loc>`), "sitemap canonical URL is stale");
 assert(headers.includes("X-Frame-Options: DENY"), "Cloudflare frame protection is missing");
 assert(headers.includes("frame-ancestors 'none'"), "Cloudflare CSP is missing frame protection");
-assert(
-  headers.includes(`/data/releases/${RELEASE}/*`) && headers.includes("immutable"),
-  "immutable release cache contract is missing",
-);
+for (const release of RELEASES) {
+  assert(
+    headers.includes(`/data/releases/${release}/*`) && headers.includes("immutable"),
+    `immutable release cache contract is missing for ${release}`,
+  );
+}
 assert(
   headers.includes(`/${ANNOTATION_FILE}`),
   "versioned annotation cache contract is missing",

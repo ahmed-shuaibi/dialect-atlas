@@ -14,14 +14,14 @@ type LoadState<T> = {
 
 const initial = <T,>(): LoadState<T> => ({ data: null, status: "loading", error: null });
 
-export function useRelease() {
+export function useRelease(releaseId: string) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<LoadState<ReleaseBundle>>(initial);
 
   useEffect(() => {
     let active = true;
     setState(initial());
-    void loadRelease()
+    void loadRelease(releaseId)
       .then((data) => {
         if (active) setState({ data, status: "ready", error: null });
       })
@@ -31,7 +31,7 @@ export function useRelease() {
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [attempt, releaseId]);
 
   const retry = useCallback(() => {
     clearAtlasCache();
@@ -41,7 +41,7 @@ export function useRelease() {
   return { ...state, retry };
 }
 
-export function useCohort(meta: CohortMeta | null) {
+export function useCohort(meta: CohortMeta | null, releaseId: string) {
   const request = useRef(0);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<LoadState<CohortData>>({
@@ -59,7 +59,7 @@ export function useCohort(meta: CohortMeta | null) {
 
     // Clear the prior cohort immediately: a fast selection must never show stale results.
     setState({ data: null, status: "loading", error: null });
-    void loadCohort(meta)
+    void loadCohort(meta, releaseId)
       .then((data) => {
         if (request.current === current) setState({ data, status: "ready", error: null });
       })
@@ -68,7 +68,7 @@ export function useCohort(meta: CohortMeta | null) {
           setState({ data: null, status: "error", error: String(error) });
         }
       });
-  }, [meta, attempt]);
+  }, [meta, attempt, releaseId]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   return { ...state, retry };

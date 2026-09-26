@@ -3,6 +3,7 @@ import {
   DEFAULT_MIN_IDENTIFIED_BMRS,
   DEFAULT_MIN_SIGNIFICANT_BMRS,
   DEFAULT_Q_THRESHOLD,
+  Q_THRESHOLDS,
   type AtlasMode,
   type Bmr,
   type BmrCount,
@@ -40,10 +41,21 @@ export function parsePairId(value: string | undefined): PairSelection | null {
 export const isSameBaseGene = (row: Pick<DialectRow, "ga" | "gb">) =>
   baseGene(row.ga) === baseGene(row.gb);
 
-export const isSignificant = (
-  row: Pick<DialectRow, "q">,
+/**
+ * K=100 rows use strict `q < cutoff`. K=500 rows carry the release builder's exact
+ * inclusive log-q decisions, so the site never re-derives a call from rounded q.
+ */
+export function isSignificant(
+  row: Pick<DialectRow, "q" | "decisionBits">,
   qThreshold = DEFAULT_Q_THRESHOLD,
-): boolean => row.q != null && row.q < qThreshold;
+): boolean {
+  if (row.decisionBits != null) {
+    const bit = Q_THRESHOLDS.findIndex((threshold) => threshold === qThreshold);
+    if (bit >= 0) return (row.decisionBits & (1 << bit)) !== 0;
+    return row.q != null && row.q <= qThreshold;
+  }
+  return row.q != null && row.q < qThreshold;
+}
 
 /** Negative fitted LRT values carry zero evidence under the release contract. */
 export const lrtEvidence = (row: Pick<DialectRow, "lrt">) => Math.max(0, row.lrt);
@@ -86,7 +98,8 @@ function cohortIndexes(data: CohortData): CohortIndexes {
     }
     byModel[bmr] = map;
     byPair[bmr] = pairMap;
-    denominators[bmr] = max;
+    // K=500 materializes a subset; percentiles use the full-table direction totals.
+    denominators[bmr] = data.directionTotals?.[bmr] ?? max;
   }
   const indexes = {
     byModel,
@@ -139,11 +152,28 @@ export function orientDialectRow(row: DialectRow, ga: string, gb: string): Diale
   };
 }
 
+/** Any tested pair row, including K=500 rows outside the materialized candidate set. */
+function pairRow(data: CohortData, bmr: Bmr, ga: string, gb: string): DialectRow | undefined {
+  return cohortIndexes(data).byPair[bmr].get(pairKey(ga, gb)) ??
+    data.lookupPair?.(bmr, ga, gb) ?? undefined;
+}
+
+function directionRow(
+  data: CohortData,
+  bmr: Bmr,
+  direction: Direction,
+  ga: string,
+  gb: string,
+): (DialectRow & { direction: Direction }) | undefined {
+  const row = cohortIndexes(data).byModel[bmr].get(resultId(direction, ga, gb)) ??
+    data.lookupPair?.(bmr, ga, gb) ?? undefined;
+  return row && row.direction === direction ? row as DialectRow & { direction: Direction } : undefined;
+}
+
 function exactMatches(data: CohortData, row: DialectRow & { direction: Direction }): ModelMatch[] {
   const indexes = cohortIndexes(data);
-  const id = resultId(row.direction, row.ga, row.gb);
   return BMR_IDS.flatMap((bmr) => {
-    const match = indexes.byModel[bmr].get(id);
+    const match = directionRow(data, bmr, row.direction, row.ga, row.gb);
     if (!match) return [];
     return [
       {
@@ -159,10 +189,8 @@ function allPairEvidence(
   data: CohortData,
   row: Pick<DialectRow, "ga" | "gb">,
 ): PairEvidence[] {
-  const indexes = cohortIndexes(data);
-  const id = pairKey(row.ga, row.gb);
   return BMR_IDS.flatMap((bmr) => {
-    const evidence = indexes.byPair[bmr].get(id);
+    const evidence = pairRow(data, bmr, row.ga, row.gb);
     return evidence
       ? [{ bmr, row: orientDialectRow(evidence, row.ga, row.gb) }]
       : [];
@@ -340,6 +368,16 @@ export function resultQ(
   return ordered[minSignificantBmrs - 1] ?? 1;
 }
 
+/** The visible q label; K=500 rows carry Benjamini-Yekutieli q. */
+export function resultQLabel(
+  result: InteractionResult,
+  mode: AtlasMode,
+  minSignificantBmrs: BmrCount = DEFAULT_MIN_SIGNIFICANT_BMRS,
+): string {
+  const label = mode === "consensus" ? consensusQLabel(minSignificantBmrs) : "q";
+  return result.representative.decisionBits != null ? `BY ${label}` : label;
+}
+
 export function consensusQLabel(minSignificantBmrs: BmrCount): string {
   if (minSignificantBmrs === 1) return "min q";
   if (minSignificantBmrs === BMR_IDS.length) return "max q";
@@ -361,11 +399,9 @@ export function backgroundSupport(
 }
 
 export function findResult(data: CohortData, selection: PairSelection): InteractionResult | null {
-  const indexes = cohortIndexes(data);
-  const id = resultId(selection.direction, selection.ga, selection.gb);
   for (const bmr of BMR_IDS) {
-    const row = indexes.byModel[bmr].get(id);
-    if (row && isDirection(row)) return toResult(data, row);
+    const row = directionRow(data, bmr, selection.direction, selection.ga, selection.gb);
+    if (row) return toResult(data, row);
   }
   return null;
 }
@@ -390,10 +426,8 @@ export function findResultForMode(
     if (significantOnly && support.significant < minSignificantBmrs) return null;
     return result;
   }
-  const row = cohortIndexes(data).byModel[mode].get(
-    resultId(selection.direction, selection.ga, selection.gb),
-  );
-  if (!row || !isDirection(row) || isSameBaseGene(row)) return null;
+  const row = directionRow(data, mode, selection.direction, selection.ga, selection.gb);
+  if (!row || isSameBaseGene(row)) return null;
   const { qThreshold = DEFAULT_Q_THRESHOLD, significantOnly = true } = filter;
   if (significantOnly && !isSignificant(row, qThreshold)) return null;
   return toResult(data, row);

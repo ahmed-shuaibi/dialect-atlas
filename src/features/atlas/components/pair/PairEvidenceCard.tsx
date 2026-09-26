@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 const EVIDENCE_STATE: Record<ReturnType<typeof modelState>, EvidenceState> = {
   significant: "supported",
   opposite: "warning",
+  unavailable: "warning",
   missing: "missing",
   "not-significant": "unsupported",
 };
@@ -32,7 +33,7 @@ export function PairEvidenceCard({
     bmr === "mutsig" && result.mutsigFallbackFeatures.length > 0 && row,
   );
   const effect = row?.direction === "ME"
-    ? { label: "ρ", value: fmtStat(row.rho) }
+    ? { label: "ρ", value: row.rho == null ? "not identifiable" : fmtStat(row.rho) }
     : row?.direction === "CO"
       ? { label: "LRT", value: lrtLabel(row) }
       : { label: "Effect", value: "not assigned" };
@@ -49,7 +50,7 @@ export function PairEvidenceCard({
           <span
             className={cn(
               state === "significant" && !fallback && "text-support",
-              state === "opposite" && "text-alert",
+              (state === "opposite" || state === "unavailable") && "text-alert",
               (state === "missing" || state === "not-significant") && "text-muted",
               fallback && "text-alert",
             )}
@@ -70,11 +71,17 @@ export function PairEvidenceCard({
                 row.direction === "neutral" && "text-muted",
               )}
             >
-              {row.direction === "neutral" ? "Neutral" : row.direction}
+              {row.direction === "neutral"
+                ? "Neutral"
+                : row.direction === "unavailable"
+                  ? "Unavailable"
+                  : row.direction}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-muted">q</dt>
+            <dt className="text-xs font-semibold text-muted">
+              {row.decisionBits != null ? "BY q" : "q"}
+            </dt>
             <dd className="mt-0.5 font-mono text-[13px] tabular-nums">{fmtQ(row.q)}</dd>
           </div>
           <div>
@@ -89,12 +96,19 @@ export function PairEvidenceCard({
               {fmtInt(row.rank)}
             </dd>
           </div>
-          <div>
-            <dt className="text-xs font-semibold text-muted">EM n</dt>
-            <dd className="mt-0.5 font-mono text-[13px] tabular-nums">
-              {fmtInt(row.effectiveN)}/{fmtInt(row.effectiveN + row.excludedSamples)}
-            </dd>
-          </div>
+          {row.decisionBits != null ? (
+            <div>
+              <dt className="text-xs font-semibold text-muted">BH q</dt>
+              <dd className="mt-0.5 font-mono text-[13px] tabular-nums">{fmtQ(row.bhQ ?? null)}</dd>
+            </div>
+          ) : (
+            <div>
+              <dt className="text-xs font-semibold text-muted">EM n</dt>
+              <dd className="mt-0.5 font-mono text-[13px] tabular-nums">
+                {fmtInt(row.effectiveN)}/{fmtInt(row.effectiveN + row.excludedSamples)}
+              </dd>
+            </div>
+          )}
         </dl>
       ) : (
         <p className="mt-3 text-sm text-muted">No result for this pair.</p>

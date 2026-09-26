@@ -1,0 +1,31 @@
+{
+  "default": "k500-2026-09-25",
+  "releases": [
+    {
+      "id": "k500-2026-09-25",
+      "schema_version": "3.0.0",
+      "k": 500,
+      "label": "K=500",
+      "title": "Revision release",
+      "description": "32 TCGA cohorts, 500 gene effects each. MutSigCV2 primary with Benjamini-Yekutieli q.",
+      "studies": [
+        "TCGA"
+      ],
+      "default_mode": "mutsig"
+    },
+    {
+      "id": "k100-2026-08-26",
+      "schema_version": "2.0.0",
+      "k": 100,
+      "label": "K=100",
+      "title": "Original release",
+      "description": "71 TCGA, MSK-IMPACT, and MSK-CHORD cohorts, 100 gene effects each. CBaSE primary.",
+      "studies": [
+        "TCGA",
+        "MSK-IMPACT",
+        "MSK-CHORD"
+      ],
+      "default_mode": "consensus"
+    }
+  ]
+}

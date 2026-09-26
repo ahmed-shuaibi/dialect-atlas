@@ -15,8 +15,10 @@ import {
   studyLabel,
   type StudyId,
 } from "@/features/atlas/lib/atlas-metadata";
+import { ReleaseSwitch } from "@/features/atlas/components/ReleaseSwitch";
 import { fmtInt } from "@/features/atlas/lib/atlas-transform";
-import type { CohortMeta } from "@/features/atlas/types";
+import { otherReleasesWithStudy } from "@/features/atlas/lib/release-catalog";
+import type { CohortMeta, ReleaseCatalogEntry } from "@/features/atlas/types";
 
 function normalize(value: string): string {
   return value.trim().toLocaleLowerCase("en-US");
@@ -65,10 +67,13 @@ function StudyOption({
   study,
   count,
   onSelect,
+  elsewhere,
 }: {
   study: (typeof STUDIES)[number];
   count: number;
   onSelect: (id: StudyId) => void;
+  /** Set when the study is only published in another release. */
+  elsewhere?: ReleaseCatalogEntry;
 }) {
   return (
     <button
@@ -79,7 +84,9 @@ function StudyOption({
       <span>
         <span className="block text-xl font-semibold text-ink">{study.label}</span>
         <span className="mt-2 block text-sm text-muted">
-          {count} {count === 1 ? "cancer type" : "cancer types"}
+          {elsewhere
+            ? `In the ${elsewhere.label} release`
+            : `${count} ${count === 1 ? "cancer type" : "cancer types"}`}
         </span>
       </span>
       <ArrowRight className="size-4 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
@@ -87,13 +94,20 @@ function StudyOption({
   );
 }
 
+type ReleaseProps = {
+  release: ReleaseCatalogEntry;
+  onReleaseChange: (id: string) => void;
+};
+
 function CohortPicker({
   cohorts,
   onSelect,
+  release,
+  onReleaseChange,
 }: {
   cohorts: CohortMeta[];
   onSelect: (id: string) => void;
-}) {
+} & ReleaseProps) {
   const [studyId, setStudyId] = useState<StudyId | null>(null);
   const [query, setQuery] = useState("");
   const queryValue = normalize(query);
@@ -103,6 +117,14 @@ function CohortPicker({
       cohorts: cohorts.filter((cohort) => cohort.study === study.id),
     })).filter((study) => study.cohorts.length > 0),
     [cohorts],
+  );
+  const elsewhere = useMemo(
+    () => STUDIES.flatMap((study) => {
+      if (studies.some(({ id }) => id === study.id)) return [];
+      const other = otherReleasesWithStudy(release, study.id)[0];
+      return other ? [{ study, release: other }] : [];
+    }),
+    [release, studies],
   );
   const activeStudy = studies.find((study) => study.id === studyId) ?? null;
   const searchResults = useMemo(() => {
@@ -168,6 +190,7 @@ function CohortPicker({
           </div>
         ) : (
           <div>
+            <ReleaseSwitch release={release} onChange={onReleaseChange} className="mb-5 px-2" />
             <p className="mb-3 px-2 text-base font-semibold">Choose a study</p>
             <div className="grid gap-2 md:grid-cols-3">
               {studies.map((study) => (
@@ -176,6 +199,15 @@ function CohortPicker({
                   study={study}
                   count={study.cohorts.length}
                   onSelect={setStudyId}
+                />
+              ))}
+              {elsewhere.map(({ study, release: other }) => (
+                <StudyOption
+                  key={study.id}
+                  study={study}
+                  count={0}
+                  elsewhere={other}
+                  onSelect={() => onReleaseChange(other.id)}
                 />
               ))}
             </div>
@@ -189,10 +221,11 @@ function CohortPicker({
 export function InitialCohortChooser({
   cohorts,
   onSelect,
+  ...releaseProps
 }: {
   cohorts: CohortMeta[];
   onSelect: (id: string) => void;
-}) {
+} & ReleaseProps) {
   return (
     <section className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-6xl flex-col justify-center px-5 py-12">
       <div className="mb-8 text-center">
@@ -204,7 +237,7 @@ export function InitialCohortChooser({
         </p>
       </div>
       <div className="surface-card mx-auto w-full max-w-5xl overflow-hidden text-left">
-        <CohortPicker cohorts={cohorts} onSelect={onSelect} />
+        <CohortPicker cohorts={cohorts} onSelect={onSelect} {...releaseProps} />
       </div>
     </section>
   );
@@ -213,10 +246,11 @@ export function InitialCohortChooser({
 export function ChangeCohortButton({
   cohorts,
   onSelect,
+  ...releaseProps
 }: {
   cohorts: CohortMeta[];
   onSelect: (id: string) => void;
-}) {
+} & ReleaseProps) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -238,6 +272,7 @@ export function ChangeCohortButton({
               onSelect(id);
               setOpen(false);
             }}
+            {...releaseProps}
           />
         </div>
       </DialogContent>

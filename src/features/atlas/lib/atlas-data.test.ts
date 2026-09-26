@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearAtlasCache, loadCohort } from "@/features/atlas/lib/atlas-data";
 import type { CohortMeta } from "@/features/atlas/types";
 
+const K100 = "k100-2026-08-26";
+
 const DIALECT_FIELDS = [
   "ga",
   "gb",
@@ -66,6 +68,7 @@ const meta = (id: string): CohortMeta => ({
   cancer: id,
   n_samples: 1,
   median_mutations: 0,
+  k: 100,
   cbio: "",
   data_file: `cohorts/${id}.json`,
   data_sha256: "0".repeat(64),
@@ -88,8 +91,8 @@ describe("loadCohort cache", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    for (const id of ["A", "B", "C", "D"]) await loadCohort(meta(id));
-    await loadCohort(meta("A"));
+    for (const id of ["A", "B", "C", "D"]) await loadCohort(meta(id), K100);
+    await loadCohort(meta("A"), K100);
 
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });

@@ -12,7 +12,20 @@ export type AtlasView = "explore" | "compare" | "about" | "contact";
 export type AtlasMode = "consensus" | Bmr;
 export type Direction = "ME" | "CO";
 export type ExploreDisplay = "network" | "list";
-export type TransportDirection = Direction | "neutral";
+/** "unavailable": the effect sign is undefined (K=500 non-identifiable pairs). */
+export type TransportDirection = Direction | "neutral" | "unavailable";
+export type ReleaseSchema = "2.0.0" | "3.0.0";
+
+export interface ReleaseCatalogEntry {
+  id: string;
+  schema_version: ReleaseSchema;
+  k: number;
+  label: string;
+  title: string;
+  description: string;
+  studies: string[];
+  default_mode: AtlasMode;
+}
 
 export interface CompactTable {
   fields: string[];
@@ -31,6 +44,11 @@ export interface ReleaseManifest {
   analysis: {
     top_k_event_features: number;
     fdr_threshold: number;
+    /** "<" (K=100, BH) or "<=" (K=500, inclusive log-q rule). */
+    fdr_operator: "<" | "<=";
+    primary_provider: Bmr;
+    primary_adjustment: string;
+    sensitivity_adjustment: string | null;
   };
   bmrs: Array<{
     id: Bmr;
@@ -59,6 +77,7 @@ export interface CohortMeta {
   n_samples: number;
   median_mutations: number;
   cbio: string;
+  k: number;
   data_file: string;
   data_sha256: string;
   data_bytes: number;
@@ -70,6 +89,7 @@ export interface ReleaseIndex {
 }
 
 export interface ReleaseBundle {
+  entry: ReleaseCatalogEntry;
   manifest: ReleaseManifest;
   index: ReleaseIndex;
   likelyPassengers: LikelyPassengerAnnotations;
@@ -97,18 +117,28 @@ export interface DialectRow {
   observedNeither: number;
   tau1x: number;
   taux1: number;
-  rho: number;
+  /** Null when the pair effect is not identifiable (K=500 releases). */
+  rho: number | null;
   logOddsRatio: number | null;
   /** Raw transport value. Negative fitted values are treated as zero evidence. */
   lrt: number;
   wald: number | null;
   p: number | null;
+  /** Release primary q: BH (K=100) or Benjamini-Yekutieli (K=500). */
   q: number | null;
   direction: TransportDirection;
   rank: number;
   tauMass: number;
   effectiveN: number;
   excludedSamples: number;
+  /**
+   * K=500 only: exact inclusive log-q decisions computed by the release builder,
+   * bit i set when q <= Q_THRESHOLDS[i]. Absent rows compare q < threshold.
+   */
+  decisionBits?: number;
+  /** K=500 only: nominal Benjamini-Hochberg sensitivity q. */
+  bhQ?: number;
+  identifiability?: string;
 }
 
 export interface BaselineRow {
@@ -134,9 +164,30 @@ export interface BaselineRow {
 export interface CohortData {
   id: string;
   drivers: string[];
+  /**
+   * Materialized rows. K=100 holds every tested pair; K=500 holds the ranked head of
+   * each direction (every call at the largest q cutoff, at least the top ranks, at
+   * most MATERIALIZED_CAP) and reaches every other pair through lookupPair.
+   */
   models: Record<Bmr, DialectRow[]>;
   baselines: BaselineRow[];
   mutsigCbaseFallbackFeatures: string[];
+  k?: number;
+  testedPairs?: number;
+  /** K=500: the per-direction ranked rows materialized even when not significant. */
+  rankedPerDirection?: number;
+  /** K=500: full-table ME/CO row counts, the denominators of rank percentiles. */
+  directionTotals?: Record<Bmr, Record<Direction, number>>;
+  /** K=500: directional rows materialized per background (the capped ranked head). */
+  materializedPerDirection?: Record<Bmr, Record<Direction, number>>;
+  /** K=500: whether any baseline test had more calls than were materialized. */
+  baselineTruncated?: boolean;
+  /** K=500: exact directional count, optionally only calls at a q cutoff. */
+  countDirectional?: (bmr: Bmr, direction: Direction, qThreshold: number | null) => number;
+  /** K=500: exact number of pairs any Compare method calls in a direction. */
+  countSupported?: (direction: Direction, qThreshold: number) => number;
+  lookupPair?: (bmr: Bmr, ga: string, gb: string) => DialectRow | null;
+  lookupBaseline?: (ga: string, gb: string) => BaselineRow | null;
 }
 
 export interface ModelMatch {
@@ -173,6 +224,7 @@ export interface PairSelection {
 }
 
 export interface AtlasUrlState {
+  release: string;
   view: AtlasView;
   cohort?: string;
   mode: AtlasMode;

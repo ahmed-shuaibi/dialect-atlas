@@ -1,7 +1,7 @@
 import { ChangeCohortButton } from "@/features/atlas/components/CohortChooser";
 import { studyLabel } from "@/features/atlas/lib/atlas-metadata";
 import { fmtInt } from "@/features/atlas/lib/atlas-transform";
-import type { AtlasView, CohortMeta } from "@/features/atlas/types";
+import type { AtlasView, CohortMeta, ReleaseCatalogEntry } from "@/features/atlas/types";
 
 type ResultsView = Extract<AtlasView, "explore" | "compare">;
 
@@ -10,11 +10,15 @@ export function CohortHeader({
   cohort,
   cohorts,
   onCohortChange,
+  release,
+  onReleaseChange,
 }: {
   view: ResultsView;
   cohort: CohortMeta;
   cohorts: CohortMeta[];
   onCohortChange: (id: string) => void;
+  release: ReleaseCatalogEntry;
+  onReleaseChange: (id: string) => void;
 }) {
   const pageLabel = view === "explore" ? "Explore" : "Compare";
   return (
@@ -28,7 +32,12 @@ export function CohortHeader({
           <span className="mx-[0.22em] font-normal text-line" aria-hidden>/</span>
           <span className="mt-1 block sm:mt-0 sm:inline">{cohort.cancer}</span>
         </h1>
-        <ChangeCohortButton cohorts={cohorts} onSelect={onCohortChange} />
+        <ChangeCohortButton
+          cohorts={cohorts}
+          onSelect={onCohortChange}
+          release={release}
+          onReleaseChange={onReleaseChange}
+        />
       </div>
       <div className="mt-4 flex flex-wrap gap-2" aria-label="Cohort summary">
         <span className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-semibold text-muted shadow-sm">
@@ -36,6 +45,9 @@ export function CohortHeader({
         </span>
         <span className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-semibold text-muted shadow-sm">
           <span className="font-mono text-[0.92em] text-ink">{fmtInt(cohort.n_samples)}</span> tumors
+        </span>
+        <span className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-semibold text-muted shadow-sm">
+          <span className="font-mono text-[0.92em] text-ink">{release.label}</span> release
         </span>
       </div>
     </header>

@@ -1,11 +1,12 @@
 # AGENTS.md — DIALECT Atlas
 
 Interactive companion to the DIALECT manuscript: candidate ME/CO gene-effect
-interactions across **71 cohorts** (TCGA PanCan, MSK-IMPACT, MSK-CHORD) × **3 BMR
-models** (CBaSE, DIG, MutSigCV2).
+interactions × **3 BMR models** (CBaSE, DIG, MutSigCV2), served as two immutable
+releases: **K=500** (default; 32 TCGA cohorts; MutSigCV2 primary, BY `q ≤`) and
+**K=100** (71 TCGA/MSK-IMPACT/MSK-CHORD cohorts; CBaSE primary, BH `q <`).
 
 Public: `https://dialectcanceratlas.com` → Cloudflare Pages project
-`dialect-cancer-atlas`. The public K=100 release is indexable. Lives under the
+`dialect-cancer-atlas`. The public releases are indexable. Lives under the
 dialect repo as `atlas/`; data is built from the parent package.
 
 ## Stack & commands
@@ -27,24 +28,30 @@ npm run check
 
 ## Data
 
-Generated, **not hand-edited**. The published data lives at the immutable,
-versioned path `public/data/releases/k100-2026-08-26/`. From the DIALECT repo:
+Generated, **not hand-edited**. Releases live at immutable, versioned paths under
+`public/data/releases/`, listed in `src/features/atlas/release-catalog.json` (which
+also names the default). Never modify or delete a published release; add a new one.
+From the DIALECT repo (see its `AGENTS.md` for the full commands):
 
 ```bash
-# Generate deterministic Fisher/DISCOVER/MEGSA/WeSME-WeSCO results first.
+# Deterministic Fisher/DISCOVER/MEGSA/WeSME-WeSCO baselines on the same pair family.
 PYTHONPATH=/path/to/DISCOVER/python \
-  python -m analysis.build_atlas_baselines --jobs 4
+  python -m analysis.build_atlas_baselines --profile k500 --jobs 6
 
-# Then assemble and validate the complete Atlas release.
-python -m analysis.build_atlas_data \
-  --out atlas/public/data/releases/k100-2026-08-26 \
-  --baseline-root output/atlas_baselines/k100 \
-  --generated-at 2026-08-26T00:00:00Z
+# Assemble, self-verify, and validate the release (clean HEAD required).
+python -m analysis.build_atlas_data --k 500 \
+  --out atlas/public/data/releases/k500-2026-09-25 \
+  --release-id k500-2026-09-25 --generated-at 2026-09-25T00:00:00Z
 node atlas/scripts/validate-release.mjs
 ```
 
-The release contains a manifest, index, human-readable data dictionary, and one
-complete compact JSON table per cohort. Types: `src/features/atlas/types.ts`.
+K=100 (schema 2.0.0) holds a manifest, index, data dictionary, and one compact JSON
+table per cohort. K=500 (schema 3.0.0) holds one `cohort.json` per cohort plus
+gzip-compressed little-endian columnar tables (`pairs`, one per background,
+`baselines`); the site decodes them in `lib/columnar.ts`, materializes the ranked
+head plus every row within the largest q cutoff, and reaches any other pair by
+lookup. K=500 decisions come from the builder's exact log-q bits, never from
+re-comparing rounded q. Types: `src/features/atlas/types.ts`.
 Likely-passenger annotations live in the separately versioned
 `public/data/annotations/likely-passengers-v1.json` sidecar. They are exact
 event features (`_M`/`_N`) drawn from the count-ranked, non-OncoKB source lists;
@@ -65,16 +72,20 @@ never edit the immutable release to add UI annotations.
   `Significant only` applies the active strict q-value cutoff. Significant rows use a
   quiet tint, never a repeated icon or text badge. Empty significant sets stay honest
   and offer a one-step return to the ranked list.
-- **All three BMRs by default:** the default candidate set requires the exact pair and
+- **Release-specific default background:** K=500 opens on MutSigCV2 (primary);
+  cross-background "Overlap" is descriptive only and never a vote. K=100 opens on
+  consensus: the default candidate set requires the exact pair and
   direction under CBaSE, DIG, and a real MutSigCV2 background. Exclude MutSig rows
   derived from CBaSE fallback features. Customize may independently lower the minimum
   BMRs identifying and significant; both default to three. Individual views use that
   model's q-value.
 - **One threshold everywhere:** q presets are controlled in Customize, shared by
-  Explore, Compare, network, and pair detail, and serialized in the hash URL. Calls use
-  strict `<`; MEGSA remains fixed at `p < 0.001` because that release field is a p-value.
-- **Scientific ranks stay direction-specific:** ME by rho ascending; CO by LRT
-  descending. Preserve raw negative numerical LRT values, but show them as zero
+  Explore, Compare, network, and pair detail, and serialized in the hash URL with the
+  release. K=100 calls use strict BH `q <`; K=500 calls use inclusive BY `q ≤`. Baseline
+  methods use `q <`; MEGSA remains fixed at `p < 0.001` because that field is a p-value.
+- **Scientific ranks stay direction-specific:** K=100 ranks ME by rho ascending and CO
+  by LRT descending; K=500 ranks each direction by BY q, then p, then |rho|. Rows whose
+  direction is unavailable are never listed as ME or CO. Preserve raw negative numerical LRT values, but show them as zero
   evidence. Do not apply an epsilon filter.
 - **Progressive disclosure:** pair detail, BMR selection, and q cutoff belong in
   dialogs/drawers; methodology and provenance belong in Compare/About, not permanent

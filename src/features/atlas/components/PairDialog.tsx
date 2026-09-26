@@ -8,7 +8,7 @@ import { ObservedMatrix } from "@/features/atlas/components/pair/ObservedMatrix"
 import { PairEvidenceCard } from "@/features/atlas/components/pair/PairEvidenceCard";
 import { PairTechnicalDetails } from "@/features/atlas/components/pair/PairTechnicalDetails";
 import { modelState } from "@/features/atlas/components/pair/pair-evidence";
-import { BMR_LABEL } from "@/features/atlas/lib/atlas-metadata";
+import { BMR_LABEL, bmrMethodsFor, qCutoffLabel } from "@/features/atlas/lib/atlas-metadata";
 import {
   backgroundSupport,
   resultIsSignificant,
@@ -23,11 +23,14 @@ import {
   type BmrCount,
   type DialectRow,
   type InteractionResult,
+  type ReleaseCatalogEntry,
 } from "@/features/atlas/types";
 import { cn } from "@/lib/utils";
 
 export type PairDialogProps = {
   result: InteractionResult | null;
+  /** Absent in isolated renders: fall back to the K=100 copy. */
+  release?: ReleaseCatalogEntry;
   mode: AtlasMode;
   qThreshold: number;
   minIdentifiedBmrs: BmrCount;
@@ -41,6 +44,7 @@ export type PairDialogProps = {
 export function PairDialog(props: PairDialogProps) {
   const {
     result,
+    release,
     mode,
     qThreshold = DEFAULT_Q_THRESHOLD,
     minIdentifiedBmrs = DEFAULT_MIN_IDENTIFIED_BMRS,
@@ -51,6 +55,9 @@ export function PairDialog(props: PairDialogProps) {
     onOpenChange,
   } = props;
   if (!result) return null;
+  const cutoff = `${release ? qCutoffLabel(release) : "q <"} ${qThreshold}`;
+  const order = release ? bmrMethodsFor(release).map(({ id }) => id as Bmr) : [...BMR_IDS];
+  const primary: Bmr = release?.default_mode === "consensus" || !release ? "cbase" : release.default_mode;
   const evidenceByModel = Object.fromEntries(
     BMR_IDS.map((bmr) => [
       bmr,
@@ -73,6 +80,8 @@ export function PairDialog(props: PairDialogProps) {
   const consensusState = consensusSignificant ? "Significant" : "Not significant";
   const lead = mode === "consensus"
     ? `${consensusState} · ${support.identified}/${support.independent} identified · ${significantSupport}/${support.independent} significant`
+    : selectedState === "unavailable"
+      ? `Significant with ${BMR_LABEL[mode]}; direction unavailable`
     : selectedState === "significant"
       ? selectedFallback
         ? "Significant in MutSigCV2 view (CBaSE fallback)"
@@ -83,8 +92,8 @@ export function PairDialog(props: PairDialogProps) {
           ? `Not tested with ${BMR_LABEL[mode]}`
           : `Not significant with ${BMR_LABEL[mode]}`;
   const active =
-    (mode !== "consensus" ? selectedRow : evidenceByModel.cbase) ??
-    evidenceByModel.cbase ??
+    (mode !== "consensus" ? selectedRow : evidenceByModel[primary]) ??
+    evidenceByModel[primary] ??
     result.pairEvidence[0]?.row;
   if (!active) return null;
   const me = result.direction === "ME";
@@ -111,8 +120,8 @@ export function PairDialog(props: PairDialogProps) {
             </p>
             <p className="mt-1 text-sm font-medium text-muted">
               {mode === "consensus"
-                ? `Requires ≥${minIdentifiedBmrs} identified and ≥${minSignificantBmrs} significant at q < ${qThreshold}.`
-                : `${significantSupport} of ${support.independent} meet q < ${qThreshold}.`}
+                ? `Requires ≥${minIdentifiedBmrs} identified and ≥${minSignificantBmrs} significant at ${cutoff}.`
+                : `${significantSupport} of ${support.independent} meet ${cutoff}.`}
             </p>
             {passengerFeatures.length > 0 && (
               <p className="mt-4 inline-flex rounded-full bg-passenger-soft px-3 py-1.5 text-sm font-semibold text-passenger">
@@ -140,7 +149,7 @@ export function PairDialog(props: PairDialogProps) {
         <section aria-labelledby="model-evidence-heading" className="mt-7">
           <h3 id="model-evidence-heading" className="text-base font-semibold">Background evidence</h3>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            {BMR_IDS.map((bmr) => (
+            {order.map((bmr) => (
               <PairEvidenceCard
                 key={bmr}
                 bmr={bmr}
@@ -154,6 +163,7 @@ export function PairDialog(props: PairDialogProps) {
 
         <PairTechnicalDetails
           evidenceByModel={evidenceByModel}
+          order={order}
           mutsigFallbackFeatures={result.mutsigFallbackFeatures}
         />
       </DialogContent>

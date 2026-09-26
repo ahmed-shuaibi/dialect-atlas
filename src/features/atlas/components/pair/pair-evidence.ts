@@ -1,5 +1,6 @@
 import {
   fmtStat,
+  isSignificant,
   lrtEvidence,
 } from "@/features/atlas/lib/atlas-transform";
 import type { DialectRow, InteractionResult } from "@/features/atlas/types";
@@ -8,6 +9,7 @@ export type PairModelState =
   | "significant"
   | "opposite"
   | "not-significant"
+  | "unavailable"
   | "missing";
 
 export function lrtLabel(row: DialectRow): string {
@@ -22,13 +24,10 @@ export function modelState(
   qThreshold: number,
 ): PairModelState {
   if (!row) return "missing";
-  if (
-    row.q != null &&
-    row.q < qThreshold &&
-    (row.direction === "ME" || row.direction === "CO")
-  ) {
+  if (isSignificant(row, qThreshold) && (row.direction === "ME" || row.direction === "CO")) {
     return row.direction === result.direction ? "significant" : "opposite";
   }
+  if (isSignificant(row, qThreshold) && row.direction === "unavailable") return "unavailable";
   return "not-significant";
 }
 
@@ -41,5 +40,6 @@ export function stateLabel(
     return `Significant ${row?.direction ?? "opposite"}; opposite direction`;
   }
   if (state === "not-significant") return "Not significant";
+  if (state === "unavailable") return "Rejected; direction unavailable";
   return "Not tested";
 }
